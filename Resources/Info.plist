@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleIdentifier</key><string>io.github.yamakze.TiebaPureMac</string>
+    <key>CFBundleName</key><string>TiebaPure-Mac</string>
+    <key>CFBundleDisplayName</key><string>TiebaPure</string>
+    <key>CFBundleExecutable</key><string>TiebaPureMac</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.social-networking</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><false/></dict>
+    <key>NSHumanReadableCopyright</key>
+    <string>Based on TiebaPure-iOS. Copyright © 2026 infinityf4p and TiebaPure-Mac contributors. GPL-3.0-only.</string>
+</dict></plist>
