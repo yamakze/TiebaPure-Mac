@@ -10,7 +10,7 @@
 
 | 范围 | 状态 |
 | --- | --- |
-| 三栏阅读、推荐、进吧、搜索、帖子与楼中楼 | 已接入原生界面，真实服务需单独验收 |
+| 侧栏导航、推荐、进吧、搜索、帖子与楼中楼 | 已接入原生界面，真实服务需单独验收 |
 | WebKit 登录、Keychain 凭证、会话失效处理 | 已接入 Mac 平台，真实账号登录需单独验收 |
 | 图片及表情 | 原生显示；复杂图文排版、预览、保存和加载缓存仍待完善 |
 | 视频及语音 | 通过系统打开远端链接；尚无内嵌播放器 |
@@ -37,6 +37,18 @@ open build/TiebaPure-Mac.app
 ```sh
 RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests
 ```
+
+## 界面截图
+
+```sh
+scripts/capture-ui.sh
+# 或指定新的输出目录
+scripts/capture-ui.sh screenshots/review-01
+```
+
+在已登录图形桌面的 Mac 上运行，需要 Xcode 命令行工具和系统允许 UI 测试。脚本构建独立的 `TiebaPure-Screenshots.app`，用 XCTest 操作实际界面，输出 21 张 PNG、`index.html`、`manifest.json` 和 `Review.xcresult`。覆盖首页、进吧入口及结果、搜索入口及结果、帖子、楼中楼、登录、设置的浅色和深色，以及首页空白、错误和加载状态。页面编号可直接用于反馈。
+
+业务页面复用 DEBUG 样例 API；截图应用使用独立 bundle ID、偏好域和内存账号，不读取真实 Keychain。登录页仍加载百度 WebKit 页面，网络内容需单独验收。样例 API 与截图启动参数不会进入 Release 构建。系统分享菜单、图片右键菜单和 macOS 权限弹窗不属于页面截图清单。
 
 ## 工程与贡献
 

@@ -1,4 +1,3 @@
-@testable import TiebaPureMac
 #if DEBUG
 import Foundation
 

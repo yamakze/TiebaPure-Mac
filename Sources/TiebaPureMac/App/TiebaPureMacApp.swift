@@ -30,6 +30,7 @@ struct TiebaPureMacApp: App {
                 }
             }
             .padding(24)
+            .preferredColorScheme(appearance.selection.preferredColorScheme)
             .frame(width: 420)
         }
     }

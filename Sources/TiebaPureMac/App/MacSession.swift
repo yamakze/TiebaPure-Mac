@@ -16,6 +16,17 @@ final class MacSession: ObservableObject {
     private var didStartLoading = false
 
     init() {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("SCREENSHOT_FIXTURES") {
+            let arguments = ProcessInfo.processInfo.arguments
+            let scenario: FixtureScenario = arguments.contains("SCREENSHOT_EMPTY") ? .empty
+                : arguments.contains("SCREENSHOT_ERROR") ? .error : .success
+            api = FixtureTiebaAPI(scenario: scenario, delayMilliseconds: arguments.contains("SCREENSHOT_LOADING") ? 60_000 : 0)
+            accountStore = AccountStore(service: MemoryAccountStoreService())
+            logoutCoordinator = LogoutCoordinator(accountStore: accountStore)
+            return
+        }
+#endif
         let store = AccountStore(service: KeychainAccountStoreService())
         let monitor = SessionExpirationMonitor()
         let configuration = URLSessionConfiguration.ephemeral

@@ -13,10 +13,13 @@ private enum ReaderSection: String, CaseIterable, Identifiable {
 }
 
 /// Search rows identify the matched reply as well as the thread.
-private struct MacThreadDestination: Identifiable {
+private struct MacThreadDestination: Identifiable, Hashable {
     let thread: ThreadSummary
     var postID: UInt64? = nil
     var id: String { "\(thread.id)-\(postID ?? 0)" }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct MacReaderView: View {
@@ -24,7 +27,7 @@ struct MacReaderView: View {
     @State private var section: ReaderSection? = .home
     @State private var input = ""
     @State private var query = ""
-    @State private var selectedThread: String?
+    @State private var path: [MacThreadDestination] = []
     @State private var threads: [MacThreadDestination] = []
     @State private var page = 1
     @State private var hasMore = false
@@ -38,6 +41,7 @@ struct MacReaderView: View {
         NavigationSplitView {
             List(ReaderSection.allCases, selection: $section) { item in
                 Label(item.rawValue, systemImage: item.icon).tag(item)
+                    .accessibilityIdentifier("section-\(item.id)")
             }
             .navigationTitle("TiebaPure")
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
@@ -55,76 +59,76 @@ struct MacReaderView: View {
                 .font(.callout)
                 .padding()
             }
-        } content: {
-            VStack(spacing: 0) {
-                if section != .home {
-                    HStack {
-                        TextField(section == .forum ? "贴吧名称" : "搜索帖子", text: $input)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit(submitQuery)
-                        Button(section == .forum ? "打开" : "搜索", action: submitQuery)
-                            .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                    .padding()
-                    Divider()
-                }
-                if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red)
-                        .font(.callout)
-                        .padding()
-                }
-                List(threads, selection: $selectedThread) { destination in
-                    let thread = destination.thread
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(thread.title).font(.headline).lineLimit(2)
-                        Text(thread.textPreview).font(.callout).foregroundStyle(.secondary).lineLimit(3)
-                        HStack {
-                            Text(thread.forumDisplayNameResolved ?? thread.author.displayNameResolved)
-                            Spacer()
-                            Label("\(thread.replyCount)", systemImage: "bubble.right")
-                        }
-                        .font(.caption).foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 6)
-                    .tag(destination.id)
-                }
-                .overlay {
-                    if isLoading && threads.isEmpty {
-                        ProgressView()
-                    } else if threads.isEmpty && errorMessage == nil {
-                        ContentUnavailableView(
-                            section == .home ? "暂无帖子" : "\(section?.rawValue ?? "搜索")",
-                            systemImage: section?.icon ?? "magnifyingglass"
-                        )
-                    }
-                }
-                HStack {
-                    if isLoading { ProgressView().controlSize(.small) }
-                    Spacer()
-                    if hasMore {
-                        Button("加载更多") { reloadID = UUID() }
-                            .disabled(isLoading)
-                    }
-                }
-                .padding(10)
-            }
-            .navigationTitle(section?.rawValue ?? "首页")
-            .navigationSplitViewColumnWidth(min: 260, ideal: 340, max: 500)
-            .toolbar {
-                Button {
-                    page = 1
-                    reloadID = UUID()
-                } label: { Label("刷新", systemImage: "arrow.clockwise") }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(isLoading)
-            }
         } detail: {
-            if let destination = threads.first(where: { $0.id == selectedThread }) {
-                MacThreadView(thread: destination.thread, initialPostID: destination.postID)
-                    .id(destination.id)
-            } else {
-                ContentUnavailableView("选择一个帖子", systemImage: "text.bubble")
+            NavigationStack(path: $path) {
+                VStack(spacing: 0) {
+                    if section != .home {
+                        HStack {
+                            TextField(section == .forum ? "贴吧名称" : "搜索帖子", text: $input)
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityIdentifier("reader-query")
+                                .onSubmit(submitQuery)
+                            Button(section == .forum ? "打开" : "搜索", action: submitQuery)
+                                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        .padding()
+                        Divider()
+                    }
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                            .font(.callout)
+                            .padding()
+                    }
+                    List(threads) { destination in
+                        NavigationLink(value: destination) {
+                            let thread = destination.thread
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(thread.title).font(.headline).lineLimit(2)
+                                Text(thread.textPreview).font(.callout).foregroundStyle(.secondary).lineLimit(3)
+                                HStack {
+                                    Text(thread.forumDisplayNameResolved ?? thread.author.displayNameResolved)
+                                    Spacer()
+                                    Label("\(thread.replyCount)", systemImage: "bubble.right")
+                                }
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 6)
+                        }
+                        .accessibilityIdentifier("thread-\(destination.id)")
+                    }
+                    .overlay {
+                        if isLoading && threads.isEmpty {
+                            ProgressView().accessibilityIdentifier("reader-loading")
+                        } else if threads.isEmpty && errorMessage == nil {
+                            ContentUnavailableView(
+                                section == .home ? "暂无帖子" : "\(section?.rawValue ?? "搜索")",
+                                systemImage: section?.icon ?? "magnifyingglass"
+                            )
+                        }
+                    }
+                    HStack {
+                        if isLoading { ProgressView().controlSize(.small) }
+                        Spacer()
+                        if hasMore {
+                            Button("加载更多") { reloadID = UUID() }
+                                .disabled(isLoading)
+                        }
+                    }
+                    .padding(10)
+                }
+                .navigationTitle(section?.rawValue ?? "首页")
+                .toolbar {
+                    Button {
+                        page = 1
+                        reloadID = UUID()
+                    } label: { Label("刷新", systemImage: "arrow.clockwise") }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(isLoading)
+                }
+                .navigationDestination(for: MacThreadDestination.self) { destination in
+                    MacThreadView(thread: destination.thread, initialPostID: destination.postID)
+                }
             }
         }
         .onChange(of: section) { _, _ in
@@ -150,7 +154,7 @@ struct MacReaderView: View {
 
     private func resetList() {
         threads = []
-        selectedThread = nil
+        path = []
         page = 1
         hasMore = false
         reloadID = UUID()

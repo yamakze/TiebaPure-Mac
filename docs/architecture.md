@@ -8,7 +8,7 @@ TiebaPure-Mac 基于上游 `5a87225` 建立独立的原生 macOS 客户端，仅
 
 1. `App/TiebaPureMacApp.swift` 定义窗口与设置场景。
 2. `App/MacSession.swift` 在应用级持有账号、API 与会话失效订阅。
-3. `App/MacReaderView.swift` 在窗口内持有栏目、查询、列表分页与选中帖子。
+3. `App/MacReaderView.swift` 在窗口内持有栏目、查询、列表分页与 NavigationStack 路径（侧栏 + 单一内容区，帖子入栈阅读）。
 4. `App/MacThreadView.swift` 持有当前帖子页与楼中楼展示，消费领域内容块。
 5. `Infrastructure/Network/TiebaAPIService.swift` 是业务 API 边界，各协议实现负责签名、请求与响应验证。
 6. `Domain/Mapping` 将协议数据映射成领域模型，`Infrastructure/State` 保留写操作协调与会话失效边界。
@@ -21,7 +21,7 @@ TiebaPure-Mac 基于上游 `5a87225` 建立独立的原生 macOS 客户端，仅
 
 Mac 从新的存储命名空间开始，不导入 iOS 沙箱。删除 iOS 16 文件后端选择和文件到 SwiftData 的后端迁移标记。保留本地保存包、资源文件的版本、校验、备份以及存储失败语义。SwiftData 的持久容器打开失败时，沿用上游的内存显示降级并显式标记不可持久化，禁止将其当成成功落盘。
 
-部分上游模型文件仍同时包含 Store 与存储实现；后续随具体功能迁移收敛职责，不复制两套业务实现。测试 fixture 放在 Tests 下，不打包进正式应用。
+部分上游模型文件仍同时包含 Store 与存储实现；后续随具体功能迁移收敛职责，不复制两套业务实现。可复用 fixture 放在 DebugSupport 下，受 `#if DEBUG` 限制，供单元测试和截图应用共用，不打包进 Release。截图脚本生成的 XCTest 工程位于 build 下，不另建应用工程配置。
 
 ## 取消与失败边界
 

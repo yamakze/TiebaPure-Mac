@@ -11,6 +11,14 @@ APP="$ROOT/build/TiebaPure-Mac.app"
 if [[ -d "$APP" ]]; then rm -rf "$APP"; fi
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/TiebaPureMac" "$APP/Contents/MacOS/"
+ICONSET="$ROOT/build/AppIcon.iconset"
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+    retina=$((size * 2))
+    sips -z "$retina" "$retina" Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/PrivacyInfo.xcprivacy LICENSE LICENSES/SwiftProtobuf-Apache-2.0.txt NOTICE.md "$APP/Contents/Resources/"
 for resource in "$BIN_DIR"/*.bundle; do

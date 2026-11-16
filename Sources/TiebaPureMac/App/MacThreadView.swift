@@ -71,6 +71,7 @@ struct MacThreadView: View {
             MacContentBlocks(blocks: post.blocks)
             if post.subpostCount > 0 {
                 Button("\(post.subpostCount) 条回复") { selectedPost = post }.buttonStyle(.link)
+                    .accessibilityIdentifier("replies-\(post.id)")
             }
         }
     }
