@@ -14,6 +14,15 @@ for path in Path('Sources').rglob('*.swift'):
     if re.search(r'import UIKit|#available\(iOS|#if os\(iOS\)', path.read_text()):
         raise SystemExit(f'iOS-only implementation: {path}')
 info = plistlib.loads(Path('Resources/Info.plist').read_bytes())
+expected_names = {
+    'CFBundleName': 'TiebaPure-Mac',
+    'CFBundleDisplayName': 'TiebaPure-Mac',
+    'CFBundleExecutable': 'TiebaPureMac',
+    'CFBundleIdentifier': 'io.github.yamakze.TiebaPureMac',
+}
+for key, expected in expected_names.items():
+    if info.get(key) != expected:
+        raise SystemExit(f'App naming differs from project policy: {key}')
 if info['LSMinimumSystemVersion'] != '14.0':
     raise SystemExit('Update Package.swift and the deployment policy together.')
 if not re.fullmatch(r'\d+\.\d+\.\d+', info['CFBundleShortVersionString']):
@@ -21,6 +30,8 @@ if not re.fullmatch(r'\d+\.\d+\.\d+', info['CFBundleShortVersionString']):
 if not str(info['CFBundleVersion']).isdigit():
     raise SystemExit('Expected a numeric build version.')
 manifest = Path('Package.swift').read_text()
+if 'name: "TiebaPure-Mac"' not in manifest:
+    raise SystemExit('SwiftPM package differs from the app name.')
 if 'platforms: [.macOS(.v14)]' not in manifest:
     raise SystemExit('Package platform differs from app deployment policy.')
 version = re.search(r'exact: "([^"]+)"', manifest).group(1)

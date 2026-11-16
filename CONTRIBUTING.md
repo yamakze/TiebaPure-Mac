@@ -6,8 +6,7 @@
 
 ```sh
 swift test
-scripts/build-app.sh debug
-open build/TiebaPure-Mac.app
+scripts/compile_and_run.sh debug
 ```
 
 协议、状态或存储变更须有行为回归验证。使用 Conventional Commits，提交信息及 PR 标题用英文，PR 详情用中文。列出实际验证及未验证范围。

@@ -6,7 +6,7 @@ struct TiebaPureMacApp: App {
     @StateObject private var appearance = AppAppearanceStore.live()
 
     var body: some Scene {
-        WindowGroup("TiebaPure", id: "reader") {
+        WindowGroup("TiebaPure-Mac", id: "reader") {
             Group {
                 if session.isReady { MacReaderView() }
                 else { ProgressView() }

@@ -4,7 +4,7 @@ import WebKit
 
 enum LoginDiagnostics {
 #if DEBUG
-    private static let prefix = "[TiebaPure.Login]"
+    private static let prefix = "[TiebaPure-Mac.Login]"
 #endif
 
     static func record(_ event: @autoclosure () -> String) {

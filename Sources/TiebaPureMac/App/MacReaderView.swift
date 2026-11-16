@@ -43,7 +43,7 @@ struct MacReaderView: View {
                 Label(item.rawValue, systemImage: item.icon).tag(item)
                     .accessibilityIdentifier("section-\(item.id)")
             }
-            .navigationTitle("TiebaPure")
+            .navigationTitle("TiebaPure-Mac")
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
             .safeAreaInset(edge: .bottom) {
                 HStack {

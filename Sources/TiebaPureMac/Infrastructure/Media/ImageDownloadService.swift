@@ -267,7 +267,7 @@ enum TiebaImageDownloadPolicy {
         let sanitizedStem = String(rawStem.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "_" })
             .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         let stem = boundedStem(sanitizedStem)
-        let resolvedStem = stem.isEmpty ? "TiebaPure-\(UUID().uuidString)" : stem
+        let resolvedStem = stem.isEmpty ? "TiebaPure-Mac-\(UUID().uuidString)" : stem
         return "\(resolvedStem).\(fileExtension(mimeType: mimeType, typeIdentifier: typeIdentifier))"
     }
 

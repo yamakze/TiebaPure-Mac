@@ -10,11 +10,12 @@ if [[ -e "$OUTPUT/Review.xcresult" ]]; then
     exit 2
 fi
 scripts/build-app.sh debug
-APP="$ROOT/build/TiebaPure-Screenshots.app"
+APP="$ROOT/build/TiebaPure-Mac-Screenshots.app"
 if [[ -d "$APP" ]]; then rm -rf "$APP"; fi
 ditto build/TiebaPure-Mac.app "$APP"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier io.github.yamakze.TiebaPureMac.Screenshots' "$APP/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c 'Set :CFBundleName TiebaPure-Screenshots' "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :CFBundleName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 # Generate a disposable standalone UI-test runner; SwiftPM remains the app's source of truth.
 python3 scripts/screenshot-project.py "$ROOT" "$APP"
@@ -44,6 +45,6 @@ if missing:
 navigation = '<nav>' + ' · '.join(f'<a href="#{name}">{name}</a>' for name in names) + '</nav>'
 note = '<p>登录表单未完成加载：' + ', '.join(sorted(login_unavailable)) + '。截图保留当时的 WebKit 状态。</p>' if login_unavailable else ''
 figures = ''.join(f'<figure id="{name}"><figcaption>{name}</figcaption><a href="{name}.png"><img src="{name}.png" loading="lazy"></a></figure>' for name in names)
-(output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>TiebaPure UI Review</title><style>body{font:16px system-ui;margin:24px;background:#eee}figure{margin:32px 0}img{max-width:100%;height:auto}figcaption{margin:10px 0}</style><h1>TiebaPure UI Review</h1><p>固定样例数据；登录页依赖百度网络。页面编号可用于反馈。</p>' + note + navigation + figures)
+(output / 'index.html').write_text('<!doctype html><meta charset="utf-8"><title>TiebaPure-Mac UI Review</title><style>body{font:16px system-ui;margin:24px;background:#eee}figure{margin:32px 0}img{max-width:100%;height:auto}figcaption{margin:10px 0}</style><h1>TiebaPure-Mac UI Review</h1><p>固定样例数据；登录页依赖百度网络。页面编号可用于反馈。</p>' + note + navigation + figures)
 print(output / 'index.html')
 PY

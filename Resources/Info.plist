@@ -3,7 +3,7 @@
 <plist version="1.0"><dict>
     <key>CFBundleIdentifier</key><string>io.github.yamakze.TiebaPureMac</string>
     <key>CFBundleName</key><string>TiebaPure-Mac</string>
-    <key>CFBundleDisplayName</key><string>TiebaPure</string>
+    <key>CFBundleDisplayName</key><string>TiebaPure-Mac</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleExecutable</key><string>TiebaPureMac</string>
     <key>CFBundlePackageType</key><string>APPL</string>

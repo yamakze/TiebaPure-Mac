@@ -4,6 +4,19 @@
 
 本仓库保留 GitHub fork 关系、上游提交历史和原作者署名。来源基线与修改声明见 [NOTICE.md](NOTICE.md)，许可证为 [GPL-3.0-only](LICENSE)。
 
+## 命名约定
+
+| 用途 | 名称 |
+| --- | --- |
+| GitHub 仓库、工作目录、SwiftPM package | `TiebaPure-Mac` |
+| 应用包、系统显示名、应用窗口 | `TiebaPure-Mac` / `TiebaPure-Mac.app` |
+| Swift 模块、可执行文件 | `TiebaPureMac`（Swift 标识符形式） |
+| 测试模块 | `TiebaPureMacTests` |
+| Bundle ID、Keychain 及偏好命名空间 | `io.github.yamakze.TiebaPureMac` |
+| 截图应用 | `TiebaPure-Mac-Screenshots.app`，独立 Bundle ID 后缀 `.Screenshots` |
+
+`TiebaPure-iOS` 用于标识上游来源、历史及版权声明。协议生成类型和请求中的上游标识保留其兼容含义，不作为当前应用名称。
+
 ## 当前进度
 
 这是 Mac 工程迁移后的开发基线，尚未完成上游全部功能的桌面实现。
@@ -26,9 +39,12 @@ iOS 工程、分享扩展、触摸转场、IPA 打包和模拟器 CI 已从活�
 ```sh
 scripts/verify-project.sh
 swift test
-scripts/build-app.sh debug
-open build/TiebaPure-Mac.app
+scripts/compile_and_run.sh
+# 优化构建并启动
+scripts/compile_and_run.sh release
 ```
+
+`scripts/compile_and_run.sh` 默认使用 debug，构建成功后重启当前检出目录对应的应用，并向 LaunchServices 注册最新名称和图标。可从任意工作目录调用脚本。
 
 `build/TiebaPure-Mac.app` 为本地应用包，默认使用 ad-hoc 签名。`scripts/build-app.sh release` 生成优化构建；正式对外分发仍需 Developer ID 签名、公证与安装验收。当前不提供正式 Mac Release。
 
@@ -46,7 +62,7 @@ scripts/capture-ui.sh
 scripts/capture-ui.sh screenshots/review-01
 ```
 
-在已登录图形桌面的 Mac 上运行，需要 Xcode 命令行工具和系统允许 UI 测试。脚本构建独立的 `TiebaPure-Screenshots.app`，用 XCTest 操作实际界面，输出 21 张 PNG、`index.html`、`manifest.json` 和 `Review.xcresult`。覆盖首页、进吧入口及结果、搜索入口及结果、帖子、楼中楼、登录、设置的浅色和深色，以及首页空白、错误和加载状态。页面编号可直接用于反馈。
+在已登录图形桌面的 Mac 上运行，需要 Xcode 命令行工具和系统允许 UI 测试。脚本构建独立的 `TiebaPure-Mac-Screenshots.app`，用 XCTest 操作实际界面，输出 21 张 PNG、`index.html`、`manifest.json` 和 `Review.xcresult`。覆盖首页、进吧入口及结果、搜索入口及结果、帖子、楼中楼、登录、设置的浅色和深色，以及首页空白、错误和加载状态。页面编号可直接用于反馈。
 
 业务页面复用 DEBUG 样例 API；截图应用使用独立 bundle ID、偏好域和内存账号，不读取真实 Keychain。登录页仍加载百度 WebKit 页面，网络内容需单独验收。样例 API 与截图启动参数不会进入 Release 构建。系统分享菜单、图片右键菜单和 macOS 权限弹窗不属于页面截图清单。
 
