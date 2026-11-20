@@ -141,31 +141,29 @@ struct MacReaderView: View {
                                            systemImage: section.icon)
                 }
             } else {
-                GeometryReader { viewport in
-                    let margin = max(24, (viewport.size.width - 824) / 2)
-                    let rowInsets = EdgeInsets(top: 4, leading: margin, bottom: 4, trailing: margin)
-                    List {
-                        ForEach(pages.items) { destination in
-                            NavigationLink(value: destination) {
-                                MacThreadRow(thread: destination.thread)
-                            }
-                            .listRowInsets(rowInsets)
-                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                            .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
-                            .accessibilityIdentifier("thread-\(destination.id)")
-                            .onAppear {
-                                if destination.id == prefetchID { pages.loadNext() }
-                            }
+                let rowInsets = EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24)
+                List {
+                    ForEach(pages.items) { destination in
+                        NavigationLink(value: destination) {
+                            MacThreadRow(thread: destination.thread)
                         }
-                        if pages.request != nil || pages.error != nil || pages.nextPage != nil {
-                            ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
-                                             loadNext: { pages.loadNext() }, retry: { pages.retry() })
-                                .listRowInsets(rowInsets)
-                                .listRowSeparator(.hidden)
+                        .listRowInsets(rowInsets)
+                        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+                        .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
+                        .accessibilityIdentifier("thread-\(destination.id)")
+                        .onAppear {
+                            if destination.id == prefetchID { pages.loadNext() }
                         }
                     }
-                    .listStyle(.plain)
+                    if pages.request != nil || pages.error != nil || pages.nextPage != nil {
+                        ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
+                                         loadNext: { pages.loadNext() }, retry: { pages.retry() })
+                            .listRowInsets(rowInsets)
+                            .listRowSeparator(.hidden)
+                    }
                 }
+                .listStyle(.plain)
+                .frame(maxWidth: 872)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -199,9 +197,16 @@ struct MacReaderView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 10)], alignment: .leading, spacing: 10) {
                             ForEach(recentForums.items) { forum in
                                 Button { submit(forum.name) } label: {
-                                    Label(forum.displayName, systemImage: "number")
-                                        .lineLimit(1)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    HStack(spacing: 8) {
+                                        Text(forum.displayName.prefix(1))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tint)
+                                            .frame(width: 24, height: 24)
+                                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                                            .accessibilityHidden(true)
+                                        Text(forum.displayName).lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .controlSize(.large)
                             }
@@ -213,8 +218,17 @@ struct MacReaderView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(searchHistory.items, id: \.self) { keyword in
-                            Button { submit(keyword) } label: { Label(keyword, systemImage: "clock") }
-                                .buttonStyle(.plain)
+                            Button { submit(keyword) } label: {
+                                Label(keyword, systemImage: "clock")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("删除此记录", systemImage: "trash", role: .destructive) {
+                                    historyError = searchHistory.remove(keyword) ? nil : "无法删除搜索记录。"
+                                }
+                            }
                         }
                     }
                 }

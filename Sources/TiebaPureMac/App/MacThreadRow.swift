@@ -18,19 +18,25 @@ struct MacThreadRow: View {
                 HStack(spacing: 7) {
                     if let forum = thread.forumDisplayNameResolved {
                         Text(forum)
-                        Text("·").accessibilityHidden(true)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.quaternary, in: Capsule())
                     }
-                    Text(thread.author.displayNameResolved).lineLimit(1)
-                    if let createdAt = thread.createdAt {
+                    Text(thread.author.displayNameResolved)
+                    HStack(spacing: 7) {
+                        if let createdAt = thread.createdAt {
+                            Text("·").accessibilityHidden(true)
+                            Text(createdAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
+                        }
                         Text("·").accessibilityHidden(true)
-                        Text(createdAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
-                            .fixedSize()
+                        Label("\(thread.replyCount)", systemImage: "bubble.right")
+                            .accessibilityLabel("\(thread.replyCount) 条回复")
                     }
-                    Text("·").accessibilityHidden(true)
-                    Label("\(thread.replyCount)", systemImage: "bubble.right")
-                        .accessibilityLabel("\(thread.replyCount) 条回复")
-                        .fixedSize()
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
                 }
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }

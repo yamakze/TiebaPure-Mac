@@ -20,12 +20,32 @@ struct MacThreadView: View {
                         .textSelection(.enabled)
                         .padding(.bottom, 18)
                         .id("thread-top")
+                    let authorID = pages.items.first?.author.id
                     ForEach(pages.items) { post in
                         VStack(alignment: .leading, spacing: 11) {
-                            HStack {
-                                Text(post.author.displayNameResolved).font(.headline)
+                            HStack(spacing: 8) {
+                                Text(post.author.displayNameResolved)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                if post.floor == 1 || (post.author.id > 0 && post.author.id == authorID) {
+                                    Text("楼主")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundStyle(.tint)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                        .fixedSize()
+                                }
                                 Spacer()
-                                Text("\(post.floor) 楼").foregroundStyle(.secondary)
+                                if let createdAt = post.createdAt {
+                                    Text(createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                                        .help(createdAt.formatted(date: .abbreviated, time: .shortened))
+                                        .lineLimit(1)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text("\(post.floor) 楼")
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize()
                             }
                             MacContentBlocks(blocks: post.blocks)
                             if post.subpostCount > 0 {
@@ -195,8 +215,18 @@ struct MacContentBlocks: View {
                     } else { Text(TiebaEmoticon.displayText(for: code)) }
                 case let .image(image):
                     if let url = image.originalURL ?? image.thumbnailURL {
-                        MacRemoteImage(url: url)
-                            .frame(maxWidth: image.width > 0 ? min(CGFloat(image.width), 812) : nil, maxHeight: 480)
+                        let hasDimensions = image.width > 0 && image.height > 0
+                        // Missing dimensions use a 4:3 preview so decoding cannot move the following content.
+                        let ratio = hasDimensions ? CGFloat(image.width) / CGFloat(image.height) : 4.0 / 3
+                        let width = hasDimensions ? CGFloat(image.width) : 480
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.quaternary)
+                            .aspectRatio(ratio, contentMode: .fit)
+                            .frame(maxWidth: min(width, 812, 480 * ratio))
+                            .overlay {
+                                MacRemoteImage(url: url)
+                            }
+                            .clipShape(.rect(cornerRadius: 6))
                     }
                 case let .video(video):
                     if let url = video.videoURL ?? video.webURL {

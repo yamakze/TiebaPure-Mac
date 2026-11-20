@@ -13,6 +13,7 @@ struct MacRemoteImage: View {
         return cache
     }()
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var image: NSImage?
     @State private var failed = false
 
@@ -37,6 +38,7 @@ struct MacRemoteImage: View {
                 ProgressView().controlSize(.small)
             }
         }
+        .animation(reduceMotion || placeholder != nil ? nil : .easeInOut(duration: 0.18), value: image != nil)
         .task(id: url) {
             image = nil
             failed = false

@@ -25,6 +25,7 @@ final class ScreenshotTests: XCTestCase {
             row.click()
             let replies = app.descendants(matching: .any)["replies-2002"].firstMatch
             XCTAssertTrue(replies.waitForExistence(timeout: 15))
+            XCTAssertTrue(app.staticTexts["楼主"].firstMatch.exists)
             capture("02-thread-\(appearance)")
             replies.click()
             XCTAssertTrue(app.staticTexts["楼中楼合成回复一"].waitForExistence(timeout: 10))
@@ -127,6 +128,12 @@ final class ScreenshotTests: XCTestCase {
         app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
         app.typeText("x")
         XCTAssertNotEqual(query.value as? String, "draftx")
+        let keyword = app.buttons["macOS"]
+        XCTAssertTrue(keyword.waitForExistence(timeout: 5))
+        keyword.rightClick()
+        app.menuItems["删除此记录"].click()
+        XCTAssertTrue(keyword.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["SwiftUI"].exists)
         app.buttons["清空历史"].click()
         XCTAssertTrue(app.staticTexts["暂无搜索记录"].waitForExistence(timeout: 10))
         app.typeKey("1", modifierFlags: .command)
