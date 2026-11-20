@@ -2,33 +2,20 @@ import XCTest
 @testable import TiebaPureMac
 
 final class ThreadPageMainPostPolicyTests: XCTestCase {
-    func testLaterPageKeepsAlreadyLoadedMainPost() {
+    func testRefreshAndLaterPagesKeepAlreadyDisplayedMainPost() {
         let main = makePost(id: 100, floor: 1)
-        let reply = makePost(id: 201, floor: 16)
-        let page = makePage(mainPost: nil, posts: [reply], currentPage: 2)
+        for (pageNumber, floor) in [(1, 2), (2, 16)] {
+            let reply = makePost(id: 201, floor: floor)
+            let page = makePage(mainPost: nil, posts: [reply], currentPage: pageNumber)
+            let merged = ThreadPageMainPostPolicy.merging(
+                page,
+                previousMainPost: main,
+                requestedPage: pageNumber
+            )
 
-        let merged = ThreadPageMainPostPolicy.merging(
-            page,
-            previousMainPost: main,
-            requestedPage: 2
-        )
-
-        XCTAssertEqual(merged.mainPost, main)
-        XCTAssertEqual(merged.posts, [reply])
-    }
-
-    func testFirstPageRefreshKeepsAlreadyDisplayedMainPost() {
-        let main = makePost(id: 100, floor: 1)
-        let reply = makePost(id: 201, floor: 2)
-        let page = makePage(mainPost: nil, posts: [reply], currentPage: 1)
-
-        let merged = ThreadPageMainPostPolicy.merging(
-            page,
-            previousMainPost: main,
-            requestedPage: 1
-        )
-
-        XCTAssertEqual(merged.mainPost, main)
+            XCTAssertEqual(merged.mainPost, main, "Page \(pageNumber)")
+            XCTAssertEqual(merged.posts, [reply], "Page \(pageNumber)")
+        }
     }
 
     func testRefreshPreservesSummaryFallbackMarkerWithItsMainPost() {

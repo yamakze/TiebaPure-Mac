@@ -57,7 +57,7 @@ struct MacUpdateSettings: View {
     var body: some View {
         Section("软件更新") {
             if let reason = updater.unavailableReason {
-                Text(reason).foregroundStyle(.secondary)
+                LabeledContent("状态", value: reason)
             } else {
                 Toggle("自动检查更新", isOn: Binding(
                     get: { updater.automaticallyChecksForUpdates },

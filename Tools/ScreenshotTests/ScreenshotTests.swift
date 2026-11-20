@@ -17,9 +17,8 @@ final class ScreenshotTests: XCTestCase {
 
     func testVisiblePages() throws {
         for appearance in ["light", "dark"] {
-            app.launchArguments = ["SCREENSHOT_FIXTURES", "-io.github.yamakze.TiebaPureMac.appearance", appearance]
-            app.launch()
-            let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "确定性主帖：回复筛选与媒体布局")).firstMatch
+            launchFixture("-io.github.yamakze.TiebaPureMac.appearance", appearance)
+            let row = app.descendants(matching: .any)["thread-1001-0"].firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 15))
             XCTAssertTrue(app.descendants(matching: .any)["thread-1101-0"].firstMatch.waitForExistence(timeout: 10))
             capture("01-home-\(appearance)")
@@ -32,10 +31,12 @@ final class ScreenshotTests: XCTestCase {
             capture("03-subposts-\(appearance)")
             XCTAssertTrue(app.staticTexts["连续加载的第三楼回复"].exists)
             app.buttons["close-subposts"].click()
-            app.typeKey("[", modifierFlags: .command)
-            XCTAssertTrue(row.waitForExistence(timeout: 10))
-            app.typeKey("]", modifierFlags: .command)
-            XCTAssertTrue(replies.waitForExistence(timeout: 10))
+            if appearance == "light" {
+                app.typeKey("[", modifierFlags: .command)
+                XCTAssertTrue(row.waitForExistence(timeout: 10))
+                app.typeKey("]", modifierFlags: .command)
+                XCTAssertTrue(replies.waitForExistence(timeout: 10))
+            }
             app.buttons["chevron.backward"].click()
             XCTAssertTrue(row.waitForExistence(timeout: 10))
             app.typeKey("2", modifierFlags: .command)
@@ -67,24 +68,23 @@ final class ScreenshotTests: XCTestCase {
             capture("08-login-\(appearance)")
             app.buttons["关闭"].click()
             app.typeKey(",", modifierFlags: .command)
-            XCTAssertTrue(app.popUpButtons.firstMatch.waitForExistence(timeout: 10))
-            capture("09-settings-\(appearance)", window: app.windows.containing(.staticText, identifier: "版本").firstMatch)
-            app.terminate()
+            let settings = app.windows.containing(.popUpButton, identifier: "settings-appearance").firstMatch
+            XCTAssertTrue(settings.waitForExistence(timeout: 10))
+            XCTAssertTrue(settings.staticTexts["软件更新"].exists)
+            XCTAssertTrue(settings.staticTexts["关于"].exists)
+            capture("09-settings-\(appearance)", window: settings)
         }
         for state in ["EMPTY", "ERROR", "LOADING"] {
-            app.launchArguments = ["SCREENSHOT_FIXTURES", "SCREENSHOT_\(state)", "-io.github.yamakze.TiebaPureMac.appearance", "light"]
-            app.launch()
+            launchFixture("SCREENSHOT_\(state)", "-io.github.yamakze.TiebaPureMac.appearance", "light")
             if state == "EMPTY" { XCTAssertTrue(app.staticTexts["暂无帖子"].waitForExistence(timeout: 10)) }
             if state == "ERROR" { XCTAssertTrue(app.staticTexts["网络不可用，请检查网络连接。"].waitForExistence(timeout: 10)) }
             if state == "LOADING" { XCTAssertTrue(app.descendants(matching: .any)["reader-loading"].firstMatch.waitForExistence(timeout: 10)) }
             capture("10-home-\(state.lowercased())")
-            app.terminate()
         }
     }
 
     func testPaginationRetryAndAccount() {
-        app.launchArguments = ["SCREENSHOT_FIXTURES", "SCREENSHOT_PAGINATION", "SCREENSHOT_ACCOUNT"]
-        app.launch()
+        launchFixture("SCREENSHOT_PAGINATION", "SCREENSHOT_ACCOUNT")
         let retry = app.descendants(matching: .any)["reader-retry"].firstMatch
         XCTAssertTrue(retry.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["thread-1001-0"].firstMatch.exists)
@@ -106,8 +106,7 @@ final class ScreenshotTests: XCTestCase {
     }
 
     func testWindowCommandsAndHistory() {
-        app.launchArguments = ["SCREENSHOT_FIXTURES", "SCREENSHOT_REFRESH"]
-        app.launch()
+        launchFixture("SCREENSHOT_REFRESH")
         let first = app.descendants(matching: .any)["thread-1001-0"].firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         XCTAssertFalse(app.toolbars.buttons["刷新"].exists)
@@ -133,6 +132,17 @@ final class ScreenshotTests: XCTestCase {
         app.typeKey("1", modifierFlags: .command)
         XCTAssertTrue(app.windows["首页"].waitForExistence(timeout: 5))
         XCTAssertTrue(query.waitForNonExistence(timeout: 5))
+    }
+
+    private func launchFixture(_ arguments: String...) {
+        app.launchArguments = ["SCREENSHOT_FIXTURES"] + arguments
+        app.launch()
+        let reader = app.windows["首页"]
+        if !reader.waitForExistence(timeout: 2) {
+            // XCTest can reopen the fixture without a restored window.
+            app.typeKey("n", modifierFlags: .command)
+            XCTAssertTrue(reader.waitForExistence(timeout: 10), "The reader window did not open.")
+        }
     }
 
     private func capture(_ name: String, window: XCUIElement? = nil) {

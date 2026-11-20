@@ -141,27 +141,33 @@ struct MacReaderView: View {
                                            systemImage: section.icon)
                 }
             } else {
-                List {
-                    ForEach(pages.items) { destination in
-                        NavigationLink(value: destination) {
-                            MacThreadRow(thread: destination.thread)
+                GeometryReader { viewport in
+                    let margin = max(24, (viewport.size.width - 824) / 2)
+                    let rowInsets = EdgeInsets(top: 4, leading: margin, bottom: 4, trailing: margin)
+                    List {
+                        ForEach(pages.items) { destination in
+                            NavigationLink(value: destination) {
+                                MacThreadRow(thread: destination.thread)
+                            }
+                            .listRowInsets(rowInsets)
+                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+                            .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
+                            .accessibilityIdentifier("thread-\(destination.id)")
+                            .onAppear {
+                                if destination.id == prefetchID { pages.loadNext() }
+                            }
                         }
-                        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                        .accessibilityIdentifier("thread-\(destination.id)")
-                        .onAppear {
-                            if destination.id == prefetchID { pages.loadNext() }
+                        if pages.request != nil || pages.error != nil || pages.nextPage != nil {
+                            ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
+                                             loadNext: { pages.loadNext() }, retry: { pages.retry() })
+                                .listRowInsets(rowInsets)
+                                .listRowSeparator(.hidden)
                         }
                     }
-                    if pages.request != nil || pages.error != nil || pages.nextPage != nil {
-                        ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
-                                         loadNext: { pages.loadNext() }, retry: { pages.retry() })
-                            .listRowSeparator(.hidden)
-                    }
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
             }
         }
-        .frame(maxWidth: 880)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
         .safeAreaInset(edge: .top, spacing: 0) {

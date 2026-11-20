@@ -31,7 +31,9 @@ while read -r process_id executable; do
         kill -KILL "$process_id"
     fi
 done <<< "$processes"
+launch_services=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$launch_services" -u "$app_bundle"
 touch "$app_bundle"
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app_bundle"
+"$launch_services" -f "$app_bundle"
 open -n "$app_bundle"
 echo "已启动：$app_bundle"

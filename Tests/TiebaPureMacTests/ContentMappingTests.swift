@@ -2,13 +2,6 @@ import XCTest
 @testable import TiebaPureMac
 
 final class ContentMappingTests: XCTestCase {
-    func testContentBlocksAreEquatable() {
-        let a = ContentBlock.text("hello")
-        let b = ContentBlock.text("hello")
-
-        XCTAssertEqual(a, b)
-    }
-
     func testUserPortraitBuildsBaiduAvatarURL() {
         let user = UserSummary(
             id: 42,

@@ -30,18 +30,26 @@ struct TiebaPureMacApp: App {
         }
         Settings {
             Form {
-                Picker("外观", selection: selectedAppearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
-                }
-                LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发构建")
-                if let url = MacReaderCommands.projectURL {
-                    Link("源码与上游声明", destination: url)
+                Section("外观") {
+                    Picker("颜色模式", selection: selectedAppearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .accessibilityIdentifier("settings-appearance")
                 }
                 MacUpdateSettings(updater: applicationDelegate.updater)
+                Section("关于") {
+                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发构建")
+                    if let url = MacReaderCommands.projectURL {
+                        LabeledContent("项目") {
+                            Link("源码与上游声明", destination: url)
+                        }
+                    }
+                }
             }
-            .padding(24)
+            .formStyle(.grouped)
+            .scrollBounceBehavior(.basedOnSize)
             .preferredColorScheme(appearance.selection.preferredColorScheme)
-            .frame(width: 420)
+            .frame(width: 460, height: 330)
         }
     }
 }

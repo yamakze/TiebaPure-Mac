@@ -19,6 +19,7 @@ ditto artifacts/macos/TiebaPure-Mac.app "$APP"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
 # Generate a disposable standalone UI-test runner; SwiftPM remains the app's source of truth.
 python3 scripts/screenshot-project.py "$ROOT" "$APP"
 xcodebuild test -project "$WORK/ScreenshotRunner.xcodeproj" -scheme Screenshots \

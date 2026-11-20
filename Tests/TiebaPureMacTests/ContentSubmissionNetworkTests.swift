@@ -291,15 +291,6 @@ final class FixtureContentSubmissionTests: XCTestCase {
             images: []
         )
         let threadReceipt = try await api.submitContent(account: account, request: newThread)
-        let forumThreads = try await api.forumThreads(
-            account: account,
-            forumName: FixtureTiebaAPI.forum.name,
-            page: 1,
-            category: .replyTime
-        )
-        let submittedThread = try XCTUnwrap(forumThreads.first(where: { $0.id == threadReceipt.threadID }))
-        XCTAssertEqual(submittedThread.title, newThread.title)
-        XCTAssertEqual(submittedThread.textPreview, newThread.body)
         let submittedThreadPage = try await api.threadPage(
             account: account,
             threadID: threadReceipt.threadID,

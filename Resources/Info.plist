@@ -4,7 +4,6 @@
     <key>CFBundleIdentifier</key><string>io.github.yamakze.TiebaPureMac</string>
     <key>CFBundleName</key><string>TiebaPure-Mac</string>
     <key>CFBundleDisplayName</key><string>TiebaPure-Mac</string>
-    <key>CFBundleIconFile</key><string>AppIcon.icns</string>
     <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
     <key>CFBundleLocalizations</key><array><string>zh-Hans</string></array>
     <key>CFBundleExecutable</key><string>TiebaPureMac</string>

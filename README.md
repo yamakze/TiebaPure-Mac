@@ -44,7 +44,7 @@ scripts/compile_and_run.sh
 scripts/compile_and_run.sh release
 ```
 
-`scripts/compile_and_run.sh` 默认使用 debug，构建成功后重启当前检出目录对应的应用，并向 LaunchServices 注册最新名称和图标。可从任意工作目录调用脚本。
+`scripts/compile_and_run.sh` 默认使用 debug，构建成功后重启当前检出目录对应的应用，并重新登记这个应用包。图标文件名随源图内容变化，供 macOS 在图标替换后重新识别。可从任意工作目录调用脚本。
 
 `artifacts/macos/TiebaPure-Mac.app` 为本地应用包，默认使用 ad-hoc 签名。`.build/` 存放 SwiftPM 及截图工具的中间产物。`scripts/build-app.sh release` 生成优化构建，加 `--universal` 同时构建 Apple Silicon 和 Intel 版本。
 

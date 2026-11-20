@@ -38,8 +38,11 @@ for size in 16 32 128 256 512; do
     retina=$((size * 2))
     sips -z "$retina" "$retina" Resources/AppIcon.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+icon_revision="$(shasum -a 256 Resources/AppIcon.png | cut -c1-12)"
+icon_file="AppIcon-$icon_revision.icns"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/$icon_file"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+plutil -insert CFBundleIconFile -string "$icon_file" "$APP/Contents/Info.plist"
 cp -R Resources/zh-Hans.lproj Resources/PrivacyInfo.xcprivacy LICENSE LICENSES/*.txt NOTICE.md "$APP/Contents/Resources/"
 for resource in "$BIN_DIR"/*.bundle; do
     [[ -d "$resource" ]] || continue
