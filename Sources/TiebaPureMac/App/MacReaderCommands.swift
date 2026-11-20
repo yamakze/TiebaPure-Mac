@@ -19,12 +19,27 @@ enum ReaderSection: String, CaseIterable, Identifiable {
     }
 }
 
+enum ReaderSearchSort: Int, CaseIterable {
+    case latest = 5
+    case relevance = 2
+
+    var title: String {
+        switch self {
+        case .latest: "最新"
+        case .relevance: "相关"
+        }
+    }
+}
+
 struct MacReaderActions {
     let show: (ReaderSection) -> Void
     let find: () -> Void
     let reload: (() -> Void)?
     let back: (() -> Void)?
     let forward: (() -> Void)?
+    let searchSort: Binding<ReaderSearchSort>?
+    let forumSort: Binding<ForumThreadCategory>?
+    let onlyFeatured: Binding<Bool>?
 }
 
 extension FocusedValues {
@@ -53,6 +68,31 @@ struct MacReaderCommands: Commands {
             Button("前进") { actions?.forward?() }.keyboardShortcut("]")
                 .disabled(actions?.forward == nil)
             Divider()
+            if let sort = actions?.searchSort {
+                Menu("搜索结果排序") {
+                    Picker("搜索结果排序", selection: sort) {
+                        ForEach(ReaderSearchSort.allCases, id: \.self) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+            }
+            if let sort = actions?.forumSort, let onlyFeatured = actions?.onlyFeatured {
+                Menu("吧内主题排序") {
+                    Picker("吧内主题排序", selection: sort) {
+                        ForEach(ForumThreadCategory.latestSortOptions) { option in
+                            Text(option.sortOptionTitle).tag(option)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                    .disabled(onlyFeatured.wrappedValue)
+                    Divider()
+                    Toggle("只看精华", isOn: onlyFeatured)
+                }
+            }
             Menu("外观") {
                 Picker("外观", selection: $appearance) {
                     ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }

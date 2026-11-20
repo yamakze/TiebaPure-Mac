@@ -152,32 +152,39 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(forum.waitForExistence(timeout: 10))
         capture("16-followed-forums")
         forum.click()
-        let options = app.descendants(matching: .any)["forum-options"].firstMatch
-        XCTAssertTrue(options.waitForExistence(timeout: 10))
-        options.click()
-        app.menuItems["发帖时间排序"].click()
+        chooseViewOption("发帖时间排序", in: "吧内主题排序")
         let publishSorted = app.descendants(matching: .any)["thread-8003-0"].firstMatch
         XCTAssertTrue(publishSorted.waitForExistence(timeout: 10))
-        options.click()
-        app.menuItems["只看精华"].click()
+        chooseViewOption("只看精华", in: "吧内主题排序")
         let featured = app.descendants(matching: .any)["thread-8001-0"].firstMatch
         XCTAssertTrue(featured.waitForExistence(timeout: 10))
         capture("14-forum-featured")
 
-        app.toolbars.buttons["search-current-forum"].firstMatch.click()
         let query = app.toolbars.searchFields.firstMatch
         XCTAssertTrue(query.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.toolbars.buttons["search-current-forum"].exists)
+        app.typeKey("f", modifierFlags: .command)
         app.typeText("Swift\r")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1003-2002"].firstMatch.waitForExistence(timeout: 10))
-        app.descendants(matching: .any)["search-order"].firstMatch.click()
-        app.menuItems["相关"].click()
+        chooseViewOption("相关", in: "搜索结果排序")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1004-2002"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.toolbars.descendants(matching: .any)["search-order"].exists)
         capture("15-forum-search")
-        app.toolbars.buttons["leave-forum-search"].firstMatch.click()
+        query.click()
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey(XCUIKeyboardKey.delete.rawValue, modifierFlags: [])
         XCTAssertTrue(featured.waitForExistence(timeout: 10))
-        options.click()
-        app.menuItems["只看精华"].click()
+        chooseViewOption("只看精华", in: "吧内主题排序")
         XCTAssertTrue(publishSorted.waitForExistence(timeout: 10))
+        app.toolbars.buttons["back-to-forum-entry"].firstMatch.click()
+        XCTAssertTrue(app.staticTexts["最近访问"].waitForExistence(timeout: 10))
+
+        app.typeKey("3", modifierFlags: .command)
+        app.typeKey("f", modifierFlags: .command)
+        app.typeText("Swift\r")
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1002-2002"].firstMatch.waitForExistence(timeout: 10))
+        chooseViewOption("最新", in: "搜索结果排序")
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1001-2002"].firstMatch.waitForExistence(timeout: 10))
 
         let library = app.descendants(matching: .any)["section-favorites"].firstMatch
         library.click()
@@ -201,6 +208,14 @@ final class ScreenshotTests: XCTestCase {
         app.menuItems["退出登录"].click()
         XCTAssertTrue(library.waitForNonExistence(timeout: 10))
         XCTAssertTrue(app.windows["首页"].waitForExistence(timeout: 10))
+    }
+
+    private func chooseViewOption(_ option: String, in submenu: String) {
+        let viewMenu = app.menuBars.menuBarItems["显示"]
+        viewMenu.click()
+        viewMenu.menuItems[submenu].firstMatch.hover()
+        XCTAssertTrue(app.menuItems[option].waitForExistence(timeout: 5))
+        app.menuItems[option].click()
     }
 
     private func launchFixture(_ arguments: String...) {
