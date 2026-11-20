@@ -12,7 +12,7 @@ CONFIGURATION="${1:-debug}"
 case "$CONFIGURATION" in debug|release) ;; *) echo "Use debug or release; see --help." >&2; exit 2 ;; esac
 scripts/build-app.sh "$CONFIGURATION"
 
-app_bundle="$ROOT/build/TiebaPure-Mac.app"
+app_bundle="$ROOT/artifacts/macos/TiebaPure-Mac.app"
 executable_name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app_bundle/Contents/Info.plist")"
 app_executable="$app_bundle/Contents/MacOS/$executable_name"
 # Match this checkout's complete executable path; other installations and the

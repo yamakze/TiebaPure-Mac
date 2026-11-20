@@ -28,8 +28,8 @@ jobs:
       - name: Release app bundle
         run: scripts/build-app.sh release
       - name: Archive local validation build
-        run: ditto -c -k --keepParent build/TiebaPure-Mac.app build/TiebaPure-Mac.zip
+        run: ditto -c -k --keepParent artifacts/macos/TiebaPure-Mac.app artifacts/macos/TiebaPure-Mac.zip
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: TiebaPure-Mac-validation
-          path: build/TiebaPure-Mac.zip
+          path: artifacts/macos/TiebaPure-Mac.zip

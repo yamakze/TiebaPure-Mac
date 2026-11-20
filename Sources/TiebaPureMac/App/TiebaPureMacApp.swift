@@ -2,8 +2,13 @@ import SwiftUI
 
 @main
 struct TiebaPureMacApp: App {
+    @NSApplicationDelegateAdaptor(MacApplicationDelegate.self) private var applicationDelegate
     @StateObject private var session = MacSession()
     @StateObject private var appearance = AppAppearanceStore.live()
+
+    private var selectedAppearance: Binding<AppAppearance> {
+        Binding(get: { appearance.selection }, set: { appearance.select($0) })
+    }
 
     var body: some Scene {
         WindowGroup("TiebaPure-Mac", id: "reader") {
@@ -19,18 +24,20 @@ struct TiebaPureMacApp: App {
                 .task { await session.load() }
         }
         .defaultSize(width: 1180, height: 800)
-        .commands { MacReaderCommands() }
+        .commands {
+            MacReaderCommands(appearance: selectedAppearance)
+            MacUpdateCommands(updater: applicationDelegate.updater)
+        }
         Settings {
             Form {
-                Picker("外观", selection: Binding(
-                    get: { appearance.selection }, set: { appearance.select($0) }
-                )) {
+                Picker("外观", selection: selectedAppearance) {
                     ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
                 }
                 LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发构建")
-                if let url = URL(string: "https://github.com/yamakze/TiebaPure-Mac") {
+                if let url = MacReaderCommands.projectURL {
                     Link("源码与上游声明", destination: url)
                 }
+                MacUpdateSettings(updater: applicationDelegate.updater)
             }
             .padding(24)
             .preferredColorScheme(appearance.selection.preferredColorScheme)

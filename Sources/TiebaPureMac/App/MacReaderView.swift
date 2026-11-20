@@ -77,11 +77,6 @@ struct MacReaderView: View {
                     }
                 }
                 .navigationTitle(section == .forum && !query.isEmpty ? forumTitle : section.rawValue)
-                .toolbar {
-                    if canReload {
-                        Button(action: reload) { Label("刷新", systemImage: "arrow.clockwise") }
-                    }
-                }
                 .navigationDestination(for: MacThreadDestination.self) { destination in
                     MacThreadView(thread: destination.thread, initialPostID: destination.postID, reloadID: threadReload)
                 }

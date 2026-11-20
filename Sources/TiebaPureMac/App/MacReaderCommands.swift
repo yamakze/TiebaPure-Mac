@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum ReaderSection: String, CaseIterable, Identifiable {
@@ -27,6 +28,7 @@ extension FocusedValues {
 
 struct MacReaderCommands: Commands {
     @FocusedValue(\.macReaderActions) private var actions
+    @Binding var appearance: AppAppearance
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
@@ -45,11 +47,26 @@ struct MacReaderCommands: Commands {
                 .disabled(actions?.back == nil)
             Button("前进") { actions?.forward?() }.keyboardShortcut("]")
                 .disabled(actions?.forward == nil)
+            Divider()
+            Menu("外观") {
+                Picker("外观", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
         }
         CommandGroup(after: .textEditing) {
             Button("搜索帖子") { actions?.find() }
                 .keyboardShortcut("f")
                 .disabled(actions == nil)
         }
+        CommandGroup(replacing: .help) {
+            if let url = Self.projectURL {
+                Button("项目主页") { NSWorkspace.shared.open(url) }
+                Button("发布记录") { NSWorkspace.shared.open(url.appending(path: "releases")) }
+            }
+        }
     }
+
+    static let projectURL = URL(string: "https://github.com/yamakze/TiebaPure-Mac")
 }

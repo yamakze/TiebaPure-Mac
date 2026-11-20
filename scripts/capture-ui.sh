@@ -10,17 +10,19 @@ if [[ -e "$OUTPUT/Review.xcresult" ]]; then
     exit 2
 fi
 scripts/build-app.sh debug
-APP="$ROOT/build/TiebaPure-Mac-Screenshots.app"
+WORK="$ROOT/.build/screenshot-runner"
+mkdir -p "$WORK"
+APP="$WORK/TiebaPure-Mac-Screenshots.app"
 if [[ -d "$APP" ]]; then rm -rf "$APP"; fi
-ditto build/TiebaPure-Mac.app "$APP"
+ditto artifacts/macos/TiebaPure-Mac.app "$APP"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier io.github.yamakze.TiebaPureMac.Screenshots' "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Set :CFBundleName TiebaPure-Mac-Screenshots' "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 # Generate a disposable standalone UI-test runner; SwiftPM remains the app's source of truth.
 python3 scripts/screenshot-project.py "$ROOT" "$APP"
-xcodebuild test -project build/ScreenshotRunner.xcodeproj -scheme Screenshots \
-    -destination 'platform=macOS' -derivedDataPath build/ScreenshotDerivedData \
+xcodebuild test -project "$WORK/ScreenshotRunner.xcodeproj" -scheme Screenshots \
+    -destination 'platform=macOS' -derivedDataPath "$WORK/DerivedData" \
     -resultBundlePath "$OUTPUT/Review.xcresult" \
     -parallel-testing-enabled NO CODE_SIGN_IDENTITY=-
 xcrun xcresulttool export attachments --path "$OUTPUT/Review.xcresult" --output-path "$OUTPUT/attachments"

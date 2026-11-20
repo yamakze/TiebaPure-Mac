@@ -46,7 +46,9 @@ scripts/compile_and_run.sh release
 
 `scripts/compile_and_run.sh` 默认使用 debug，构建成功后重启当前检出目录对应的应用，并向 LaunchServices 注册最新名称和图标。可从任意工作目录调用脚本。
 
-`build/TiebaPure-Mac.app` 为本地应用包，默认使用 ad-hoc 签名。`scripts/build-app.sh release` 生成优化构建；正式对外分发仍需 Developer ID 签名、公证与安装验收。当前不提供正式 Mac Release。
+`artifacts/macos/TiebaPure-Mac.app` 为本地应用包，默认使用 ad-hoc 签名。`.build/` 存放 SwiftPM 及截图工具的中间产物。`scripts/build-app.sh release` 生成优化构建，加 `--universal` 同时构建 Apple Silicon 和 Intel 版本。
+
+通过正式 GitHub Release 安装的应用可从「TiebaPure-Mac → 检查更新…」手动检查，或在「设置 → 软件更新」管理自动检查与安装。自动检查默认开启，自动安装由用户开启。本地构建显示更新配置状态。发布与签名流程见 [贡献约定](CONTRIBUTING.md#发布)。
 
 日常测试使用确定性 fixture，不访问真实贴吧服务。需要只读线上检查时显式运行：
 
@@ -62,7 +64,7 @@ RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests
 | `⌘F` | 打开搜索并聚焦工具栏搜索框 |
 | `Return` | 提交贴吧名称或搜索词 |
 | `Esc` | 清空输入或退出输入焦点 |
-| `⌘R` | 刷新当前列表或帖子 |
+| `⌘R` | 「显示 → 刷新」当前列表或帖子 |
 | `⌘[` / `⌘]` | 返回列表 / 前进到刚读过的帖子 |
 
 ## 界面截图

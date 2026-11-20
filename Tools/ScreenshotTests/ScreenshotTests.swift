@@ -40,7 +40,7 @@ final class ScreenshotTests: XCTestCase {
             XCTAssertTrue(row.waitForExistence(timeout: 10))
             app.typeKey("2", modifierFlags: .command)
             XCTAssertTrue(app.staticTexts["最近访问"].waitForExistence(timeout: 10))
-            let query = app.searchFields.firstMatch
+            let query = app.toolbars.searchFields.firstMatch
             XCTAssertTrue(query.waitForExistence(timeout: 10))
             capture("04-forum-entry-\(appearance)")
             query.click()
@@ -110,11 +110,18 @@ final class ScreenshotTests: XCTestCase {
         app.launch()
         let first = app.descendants(matching: .any)["thread-1001-0"].firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.toolbars.buttons["刷新"].exists)
+        let viewMenu = app.menuBars.menuBarItems["显示"]
+        XCTAssertTrue(viewMenu.exists)
+        viewMenu.click()
+        XCTAssertTrue(viewMenu.menuItems["刷新"].isEnabled)
+        XCTAssertTrue(viewMenu.menuItems["外观"].exists)
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
         app.typeKey("r", modifierFlags: .command)
         XCTAssertTrue(app.descendants(matching: .any)["thread-1099-0"].firstMatch.waitForExistence(timeout: 10))
 
         app.typeKey("f", modifierFlags: .command)
-        let query = app.searchFields.firstMatch
+        let query = app.toolbars.searchFields.firstMatch
         XCTAssertTrue(query.waitForExistence(timeout: 10))
         app.typeText("draft")
         XCTAssertEqual(query.value as? String, "draft")
@@ -124,7 +131,8 @@ final class ScreenshotTests: XCTestCase {
         app.buttons["清空历史"].click()
         XCTAssertTrue(app.staticTexts["暂无搜索记录"].waitForExistence(timeout: 10))
         app.typeKey("1", modifierFlags: .command)
-        XCTAssertFalse(app.searchFields.firstMatch.exists)
+        XCTAssertTrue(app.windows["首页"].waitForExistence(timeout: 5))
+        XCTAssertTrue(query.waitForNonExistence(timeout: 5))
     }
 
     private func capture(_ name: String, window: XCUIElement? = nil) {

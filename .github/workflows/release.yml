@@ -1,0 +1,107 @@
+name: macOS Release
+
+on:
+  push:
+    tags: ['mac-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'yamakze/TiebaPure-Mac'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - name: Check tag and run tests
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
+          if [[ "$GITHUB_REF_NAME" != "mac-v$version" ]]; then
+            echo 'The release tag must match the version in Resources/Info.plist.' >&2
+            exit 1
+          fi
+          scripts/verify-project.sh
+          swift test
+      - name: Sign and notarize Universal app
+        env:
+          CODE_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          : "${CODE_SIGN_IDENTITY:?Set MACOS_SIGN_IDENTITY}"
+          : "${MACOS_CERTIFICATE_P12:?Set MACOS_CERTIFICATE_P12}"
+          : "${MACOS_CERTIFICATE_PASSWORD:?Set MACOS_CERTIFICATE_PASSWORD}"
+          : "${APPLE_ID:?Set APPLE_ID}"
+          : "${APPLE_TEAM_ID:?Set APPLE_TEAM_ID}"
+          : "${APPLE_APP_PASSWORD:?Set APPLE_APP_PASSWORD}"
+          : "${SPARKLE_PUBLIC_KEY:?Set SPARKLE_PUBLIC_KEY}"
+          work=$(mktemp -d "$RUNNER_TEMP/tiebapure-signing.XXXXXX")
+          keychain="$work/release.keychain-db"
+          trap 'security delete-keychain "$keychain"; rm -rf "$work"' EXIT
+          password=$(uuidgen)
+          echo "::add-mask::$password"
+          printf '%s' "$MACOS_CERTIFICATE_P12" | base64 --decode > "$work/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$work/certificate.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain"
+          rm "$work/certificate.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | grep -F -- "$CODE_SIGN_IDENTITY")
+          if [[ "$identity" != *'"Developer ID Application:'* ]]; then
+            echo 'Developer ID Application signing is required.' >&2
+            exit 1
+          fi
+          scripts/build-app.sh release --universal
+          app=artifacts/macos/TiebaPure-Mac.app
+          ditto -c -k --keepParent "$app" "$work/notarize.zip"
+          xcrun notarytool submit "$work/notarize.zip" --wait \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose "$app"
+      - name: Generate signed Sparkle update feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: python3 scripts/release-assets.py "$GITHUB_REF_NAME" artifacts/macos/TiebaPure-Mac.app
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-release
+          path: artifacts/release/${{ github.ref_name }}
+          if-no-files-found: error
+
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: macos-release
+          path: release
+      - name: Create release draft
+        working-directory: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sha256sum -c SHA256SUMS.txt
+          version=${GITHUB_REF_NAME#mac-v}
+          gh release create "$GITHUB_REF_NAME" "TiebaPure-Mac-$version.zip" appcast.xml SHA256SUMS.txt \
+            --draft --verify-tag --title "TiebaPure-Mac $version" --notes-file RELEASE_NOTES.md

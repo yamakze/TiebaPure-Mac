@@ -9,6 +9,9 @@
 - 移除 iOS 工程、分享扩展、触摸转场、IPA 脚本与模拟器 CI。
 
 - 统一 TiebaPure-Mac 应用命名与缓存前缀，增加一键构建启动脚本。
+- 改用透明底 Mac 图标，应用产物移至 `artifacts/macos`。
+- 本地化系统菜单，将刷新移至「显示」，提供外观切换和发布记录入口。
+- 使用 Sparkle 检查和安装签名更新，增加 Universal 应用公证与发布草稿流程。
 
 ### English
 
@@ -18,3 +21,6 @@
 - Reuse the upstream app icon and add a full-page light/dark screenshot script.
 - Remove the iOS project, action extension, touch transitions, IPA scripts, and simulator CI.
 - Unify TiebaPure-Mac app naming and cache prefixes; add a build-and-run script.
+- Use a transparent Mac app icon and publish local bundles under `artifacts/macos`.
+- Localize native menus and add menu actions for refresh, appearance, and release history.
+- Integrate signed Sparkle updates and a notarized Universal release workflow.

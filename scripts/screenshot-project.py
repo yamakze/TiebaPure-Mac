@@ -5,7 +5,7 @@ import sys
 from xml.sax.saxutils import escape
 
 root, app = map(pathlib.Path, sys.argv[1:])
-project = root / 'build/ScreenshotRunner.xcodeproj'
+project = app.parent / 'ScreenshotRunner.xcodeproj'
 project.mkdir(parents=True, exist_ok=True)
 # Stable local IDs make the generated project easy to inspect.
 ids = {key: f'{index:024X}' for index, key in enumerate([
