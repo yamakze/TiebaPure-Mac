@@ -12,6 +12,7 @@ final class MacSession: ObservableObject {
     let accountStore: AccountStore
     private(set) lazy var recentForums = RecentForumStore.shared
     private(set) lazy var searchHistory = SearchHistoryStore.shared
+    private(set) var forumSort = ForumThreadSortPreferenceStore()
     private let logoutCoordinator: LogoutCoordinator
     private var subscriptions = Set<AnyCancellable>()
     @Published private(set) var isLoggingOut = false
@@ -32,6 +33,8 @@ final class MacSession: ObservableObject {
             logoutCoordinator = LogoutCoordinator(accountStore: accountStore, artifactCleaner: ScreenshotSessionCleaner())
             recentForums = RecentForumStore(key: "fixture.recentForums", persistence: ScreenshotHistory<RecentForum>())
             searchHistory = SearchHistoryStore(key: "fixture.searchHistory", persistence: ScreenshotHistory<String>())
+            forumSort = ForumThreadSortPreferenceStore(key: "fixture.forum-thread-sort")
+            forumSort.reset()
             recentForums.save(FixtureTiebaAPI.forum)
             recentForums.save(FixtureTiebaAPI.forumTwo)
             searchHistory.record("SwiftUI")

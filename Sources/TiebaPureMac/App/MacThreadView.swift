@@ -3,13 +3,20 @@ import SwiftUI
 struct MacThreadView: View {
     @EnvironmentObject private var session: MacSession
     let thread: ThreadSummary
-    let initialPostID: UInt64?
     let reloadID: UUID
 
     @State private var header: ThreadSummary?
     @State private var forumID: Int64?
     @State private var pages = ReaderPages<Post>()
     @State private var selectedPost: Post?
+    @State private var onlyAuthor = false
+    @State private var targetPostID: UInt64?
+
+    init(thread: ThreadSummary, initialPostID: UInt64?, reloadID: UUID) {
+        self.thread = thread
+        self.reloadID = reloadID
+        _targetPostID = State(initialValue: initialPostID)
+    }
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -66,10 +73,16 @@ struct MacThreadView: View {
                 .frame(maxWidth: .infinity)
             }
             .onChange(of: pages.items.first?.id) { old, new in
-                if old == nil, new != nil, let initialPostID,
-                   pages.items.contains(where: { $0.id == initialPostID }) {
-                    scroll.scrollTo(initialPostID, anchor: .top)
+                if old == nil, new != nil, let targetPostID,
+                   pages.items.contains(where: { $0.id == targetPostID }) {
+                    scroll.scrollTo(targetPostID, anchor: .top)
                 }
+            }
+            .onChange(of: onlyAuthor) { _, _ in
+                targetPostID = nil
+                selectedPost = nil
+                scroll.scrollTo("thread-top", anchor: .top)
+                pages.reload(clear: true)
             }
             .onChange(of: reloadID) { _, _ in
                 selectedPost = nil
@@ -79,6 +92,10 @@ struct MacThreadView: View {
         }
         .navigationTitle(header?.forumDisplayNameResolved ?? thread.forumDisplayNameResolved ?? "帖子")
         .toolbar {
+            Toggle("只看楼主", systemImage: "person.crop.circle", isOn: $onlyAuthor)
+                .toggleStyle(.button)
+                .help("只看楼主")
+                .accessibilityIdentifier("only-thread-author")
             if let url = URL(string: "https://tieba.baidu.com/p/\(thread.id)") {
                 ShareLink(item: url)
             }
@@ -107,10 +124,13 @@ struct MacThreadView: View {
     private func loadPage(_ request: ReaderPages<Post>.Request) async {
         guard pages.request == request else { return }
         let requestedPage = request.page
+        let onlyAuthor = onlyAuthor
+        let account = session.account
         do {
             let incoming = try await session.api.threadPage(
-                account: session.account, threadID: thread.id, page: requestedPage,
-                forumID: forumID ?? thread.forumID, postID: request.replacesItems ? initialPostID : nil
+                account: account, threadID: thread.id, page: requestedPage,
+                forumID: forumID ?? thread.forumID, postID: request.replacesItems && !onlyAuthor ? targetPostID : nil,
+                seeLz: onlyAuthor
             )
             try Task.checkCancellation()
             var posts = incoming.posts.filter { $0.floor != 1 }
@@ -118,7 +138,7 @@ struct MacThreadView: View {
                 var mainPost = ThreadPageMainPostPolicy.mainPost(in: incoming)
                 if mainPost == nil {
                     let first = try await session.api.threadPage(
-                        account: session.account, threadID: thread.id, page: 1, forumID: incoming.forum.id
+                        account: account, threadID: thread.id, page: 1, forumID: incoming.forum.id, seeLz: onlyAuthor
                     )
                     try Task.checkCancellation()
                     mainPost = ThreadPageMainPostPolicy.mainPost(in: first)
@@ -126,7 +146,7 @@ struct MacThreadView: View {
                 guard let mainPost else { throw TiebaAPIError.missingMainPost }
                 posts.insert(mainPost, at: 0)
             }
-            guard pages.request == request else { return }
+            guard pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
             header = incoming.thread
             forumID = incoming.forum.id
             pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)

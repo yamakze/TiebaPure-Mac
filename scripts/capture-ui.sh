@@ -34,6 +34,7 @@ names = [f'{number:02}-{page}-{appearance}' for appearance in ['light', 'dark']
          for number, page in enumerate(['home', 'thread', 'subposts', 'forum-entry', 'forum', 'search-entry', 'search', 'login', 'settings'], 1)]
 names += [f'10-home-{state}' for state in ['empty', 'error', 'loading']]
 names += ['11-home-pagination-retry', '12-home-account', '13-account-profile']
+names += ['14-forum-featured', '15-forum-search', '16-followed-forums', '17-favorites', '18-thread-author']
 login_unavailable = []
 for test in json.loads((output / 'attachments/manifest.json').read_text()):
     for attachment in test['attachments']:

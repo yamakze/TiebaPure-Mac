@@ -141,6 +141,68 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(query.waitForNonExistence(timeout: 5))
     }
 
+    func testForumSearchAndAccountLibrary() {
+        launchFixture("SCREENSHOT_ACCOUNT", "UITEST_SEED_ACCOUNT_COLLECTION",
+                      "-io.github.yamakze.TiebaPureMac.appearance", "light")
+
+        let followed = app.descendants(matching: .any)["section-followedForums"].firstMatch
+        XCTAssertTrue(followed.waitForExistence(timeout: 10))
+        followed.click()
+        let forum = app.buttons["followed-forum-101"]
+        XCTAssertTrue(forum.waitForExistence(timeout: 10))
+        capture("16-followed-forums")
+        forum.click()
+        let options = app.descendants(matching: .any)["forum-options"].firstMatch
+        XCTAssertTrue(options.waitForExistence(timeout: 10))
+        options.click()
+        app.menuItems["发帖时间排序"].click()
+        let publishSorted = app.descendants(matching: .any)["thread-8003-0"].firstMatch
+        XCTAssertTrue(publishSorted.waitForExistence(timeout: 10))
+        options.click()
+        app.menuItems["只看精华"].click()
+        let featured = app.descendants(matching: .any)["thread-8001-0"].firstMatch
+        XCTAssertTrue(featured.waitForExistence(timeout: 10))
+        capture("14-forum-featured")
+
+        app.toolbars.buttons["search-current-forum"].firstMatch.click()
+        let query = app.toolbars.searchFields.firstMatch
+        XCTAssertTrue(query.waitForExistence(timeout: 10))
+        app.typeText("Swift\r")
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1003-2002"].firstMatch.waitForExistence(timeout: 10))
+        app.descendants(matching: .any)["search-order"].firstMatch.click()
+        app.menuItems["相关"].click()
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1004-2002"].firstMatch.waitForExistence(timeout: 10))
+        capture("15-forum-search")
+        app.toolbars.buttons["leave-forum-search"].firstMatch.click()
+        XCTAssertTrue(featured.waitForExistence(timeout: 10))
+        options.click()
+        app.menuItems["只看精华"].click()
+        XCTAssertTrue(publishSorted.waitForExistence(timeout: 10))
+
+        let library = app.descendants(matching: .any)["section-favorites"].firstMatch
+        library.click()
+        let marked = app.descendants(matching: .any)["thread-1001-0"].firstMatch
+        XCTAssertTrue(marked.waitForExistence(timeout: 10))
+        capture("17-favorites")
+        marked.click()
+        let reply = app.staticTexts["已定位搜索命中回复"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 10))
+        let onlyAuthor = app.descendants(matching: .any)["only-thread-author"].firstMatch
+        onlyAuthor.click()
+        XCTAssertTrue(reply.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["楼主"].firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.descendants(matching: .any)["replies-2002"].firstMatch.exists)
+        capture("18-thread-author")
+        onlyAuthor.click()
+        XCTAssertTrue(app.staticTexts["确定性回复内容"].waitForExistence(timeout: 10))
+
+        let account = app.descendants(matching: .any)["account-menu"].firstMatch
+        account.click()
+        app.menuItems["退出登录"].click()
+        XCTAssertTrue(library.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.windows["首页"].waitForExistence(timeout: 10))
+    }
+
     private func launchFixture(_ arguments: String...) {
         app.launchArguments = ["SCREENSHOT_FIXTURES"] + arguments
         app.launch()

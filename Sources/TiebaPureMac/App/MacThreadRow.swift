@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MacThreadRow: View {
     let thread: ThreadSummary
+    var forumCategory: ForumThreadCategory? = nil
 
     var body: some View {
         let preview = thread.textPreview
@@ -24,9 +25,9 @@ struct MacThreadRow: View {
                     }
                     Text(thread.author.displayNameResolved)
                     HStack(spacing: 7) {
-                        if let createdAt = thread.createdAt {
+                        if let date = forumCategory?.metadata(for: thread).date ?? thread.createdAt ?? thread.lastReplyAt {
                             Text("·").accessibilityHidden(true)
-                            Text(createdAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
+                            Text(date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
                         }
                         Text("·").accessibilityHidden(true)
                         Label("\(thread.replyCount)", systemImage: "bubble.right")

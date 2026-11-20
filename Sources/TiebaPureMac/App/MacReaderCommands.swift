@@ -3,13 +3,18 @@ import SwiftUI
 
 enum ReaderSection: String, CaseIterable, Identifiable {
     case home = "首页", forum = "进吧", search = "搜索"
+    case followedForums = "关注的吧", favorites = "收藏夹"
 
     var id: Self { self }
+    var requiresAccount: Bool { self == .followedForums || self == .favorites }
+
     var icon: String {
         switch self {
         case .home: "house"
         case .forum: "square.grid.2x2"
         case .search: "magnifyingglass"
+        case .followedForums: "star"
+        case .favorites: "bookmark"
         }
     }
 }

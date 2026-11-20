@@ -158,7 +158,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
             fixtureThreads.insert(pinned, at: 0)
         }
 
-        if (scenario == .forumCategories || scenario == .forumCategoryRace),
+        if (scenario == .forumCategories || scenario == .forumCategoryRace
+            || (scenario == .macReader && category != .replyTime)),
            fixtureThreads.isEmpty == false {
             switch category {
             case .replyTime:
@@ -173,6 +174,9 @@ struct FixtureTiebaAPI: TiebaAPIService {
             let now = Date()
             fixtureThreads[0].createdAt = now.addingTimeInterval(-12 * 60)
             fixtureThreads[0].lastReplyAt = now.addingTimeInterval(-10)
+        }
+        if scenario == .macReader && category == .featured {
+            fixtureThreads = fixtureThreads.filter(\.isGood)
         }
 
         let submittedThreads = await state.submittedThreads(forumName: forumName)
@@ -198,13 +202,25 @@ struct FixtureTiebaAPI: TiebaAPIService {
         if keyword == "仅回复命中", filterType == 1 {
             return SearchResultsPage(results: [], currentPage: page, hasMore: false)
         }
+        let title: String
+        let threadID: Int64
+        if scenario == .macReader, let forumName {
+            title = "\(forumName)吧内搜索：\(keyword)（\(sortType == 2 ? "相关" : "最新")）"
+            threadID = sortType == 2 ? 1004 : 1003
+        } else if scenario == .macReader && sortType == 2 {
+            title = "\(keyword) 的相关搜索结果"
+            threadID = 1002
+        } else {
+            title = "\(keyword) 的确定性搜索结果"
+            threadID = 1001
+        }
         let result = SearchResult(
-            threadID: 1001,
+            threadID: threadID,
             postID: 2002,
             forumID: Self.forum.id,
             forumName: forumName ?? Self.forum.name,
             forumAvatarURL: nil,
-            title: "\(keyword) 的确定性搜索结果",
+            title: title,
             content: "命中第二楼回复，可验证 postID 路由。",
             author: Self.author,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
@@ -396,6 +412,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
             next.blocks = [.text("连续加载的第三楼回复")]
             posts = [reply, next]
         }
+        if seeLz { posts = posts.filter { $0.author.id == main.author.id } }
         var isCollected = false
         if let account {
             await seedCollectionIfNeeded(account: account)
@@ -407,8 +424,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
             mainPost: omitsMainPost ? nil : main,
             posts: posts,
             currentPage: page,
-            totalPage: scenario == .macReader ? 2 : 1,
-            hasMore: scenario == .macReader && page == 1,
+            totalPage: scenario == .macReader && !seeLz ? 2 : 1,
+            hasMore: scenario == .macReader && !seeLz && page == 1,
             isCollected: isCollected
         )
     }
