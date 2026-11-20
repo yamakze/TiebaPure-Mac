@@ -1,0 +1,55 @@
+import SwiftUI
+
+enum ReaderSection: String, CaseIterable, Identifiable {
+    case home = "首页", forum = "进吧", search = "搜索"
+
+    var id: Self { self }
+    var icon: String {
+        switch self {
+        case .home: "house"
+        case .forum: "square.grid.2x2"
+        case .search: "magnifyingglass"
+        }
+    }
+}
+
+struct MacReaderActions {
+    let show: (ReaderSection) -> Void
+    let find: () -> Void
+    let reload: (() -> Void)?
+    let back: (() -> Void)?
+    let forward: (() -> Void)?
+}
+
+extension FocusedValues {
+    @Entry var macReaderActions: MacReaderActions?
+}
+
+struct MacReaderCommands: Commands {
+    @FocusedValue(\.macReaderActions) private var actions
+
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Button("刷新") { actions?.reload?() }
+                .keyboardShortcut("r")
+                .disabled(actions?.reload == nil)
+            Divider()
+            Button("首页") { actions?.show(.home) }.keyboardShortcut("1")
+                .disabled(actions == nil)
+            Button("进吧") { actions?.show(.forum) }.keyboardShortcut("2")
+                .disabled(actions == nil)
+            Button("搜索") { actions?.show(.search) }.keyboardShortcut("3")
+                .disabled(actions == nil)
+            Divider()
+            Button("返回") { actions?.back?() }.keyboardShortcut("[")
+                .disabled(actions?.back == nil)
+            Button("前进") { actions?.forward?() }.keyboardShortcut("]")
+                .disabled(actions?.forward == nil)
+        }
+        CommandGroup(after: .textEditing) {
+            Button("搜索帖子") { actions?.find() }
+                .keyboardShortcut("f")
+                .disabled(actions == nil)
+        }
+    }
+}

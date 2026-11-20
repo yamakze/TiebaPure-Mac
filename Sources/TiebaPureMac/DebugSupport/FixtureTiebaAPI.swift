@@ -3,6 +3,8 @@ import Foundation
 
 enum FixtureScenario: String {
     case success
+    case macReader
+    case macReaderRetry
     case refreshUpdate
     case slowPaginationRefresh
     case slowHomeRefresh
@@ -72,6 +74,16 @@ struct FixtureTiebaAPI: TiebaAPIService {
             let requestNumber = await state.nextPersonalizedPageOneRequestNumber()
             return requestNumber == 1 ? Self.threads : [Self.refreshedThread]
         }
+        if page == 2, scenario == .macReaderRetry, await state.shouldFail(page: page) {
+            throw URLError(.timedOut)
+        }
+        if page == 2 && (scenario == .macReader || scenario == .macReaderRetry) {
+            var thread = Self.threads[0]
+            thread.id = 1101
+            thread.title = "连续加载的下一页帖子"
+            thread.blocks = [.text("用于验证触底翻页、失败重试与列表追加。")]
+            return [Self.threads[0], thread]
+        }
         return page == 1 ? personalizedFixtureThreads : []
     }
 
@@ -125,7 +137,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
             copy.forumName = forumName
             return copy
         }
-        if scenario == .imageGesture {
+        if scenario == .imageGesture || scenario == .macReader {
             fixtureThreads = threadsWithSyntheticMediaURLs(
                 fixtureThreads,
                 pathPrefix: "forum"
@@ -265,10 +277,10 @@ struct FixtureTiebaAPI: TiebaAPIService {
         }
         let scrollVariant = ProcessInfo.processInfo.environment["TIEBAPURE_SCROLL_FIXTURE_VARIANT"]
             ?? "mixed"
-        let imageFixtureHost = scenario == .imageGesture || scenario == .scrollPerformance
+        let imageFixtureHost = scenario == .imageGesture || scenario == .scrollPerformance || scenario == .macReader
             ? "fixture-success.invalid"
             : "fixture.invalid"
-        let longImage = ImageContent(
+        var longImage = ImageContent(
             thumbnailURL: URL(string: "https://\(imageFixtureHost)/long-image.png"),
             originalURL: URL(string: "https://\(imageFixtureHost)/long-image-original.png"),
             width: 400,
@@ -292,6 +304,10 @@ struct FixtureTiebaAPI: TiebaAPIService {
             default:
                 mainBlocks.append(.emoticon(code: "滑稽"))
             }
+        }
+        if scenario == .macReader {
+            longImage.width = 220
+            longImage.height = 220
         }
         if scenario != .textClipping,
            scenario != .readingPosition,
@@ -370,9 +386,16 @@ struct FixtureTiebaAPI: TiebaAPIService {
         let submittedPosts = await state.submittedPosts(threadID: threadID)
         let omitsMainPost = scenario == .missingMain
             || scenario == .missingMainThenRecovery && threadPageOneRequestNumber == 1
-        let posts = page == 1
+        var posts = page == 1
             ? (omitsMainPost ? replies + submittedPosts : [main] + replies + submittedPosts)
             : []
+        if scenario == .macReader && page == 2 {
+            var next = reply
+            next.id = 2003
+            next.floor = 3
+            next.blocks = [.text("连续加载的第三楼回复")]
+            posts = [reply, next]
+        }
         var isCollected = false
         if let account {
             await seedCollectionIfNeeded(account: account)
@@ -384,8 +407,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
             mainPost: omitsMainPost ? nil : main,
             posts: posts,
             currentPage: page,
-            totalPage: 1,
-            hasMore: false,
+            totalPage: scenario == .macReader ? 2 : 1,
+            hasMore: scenario == .macReader && page == 1,
             isCollected: isCollected
         )
     }
@@ -768,7 +791,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
 
     private var personalizedFixtureThreads: [ThreadSummary] {
         switch scenario {
-        case .imageGesture:
+        case .imageGesture, .macReader:
             return threadsWithSyntheticMediaURLs(Self.threads, pathPrefix: "home")
         case .voicePlayback:
             var voiceThread = Self.threads[0]

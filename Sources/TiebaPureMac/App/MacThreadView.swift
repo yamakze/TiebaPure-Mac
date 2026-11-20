@@ -1,163 +1,177 @@
 import SwiftUI
-import ImageIO
 
 struct MacThreadView: View {
     @EnvironmentObject private var session: MacSession
     let thread: ThreadSummary
-    var initialPostID: UInt64? = nil
-    @State private var threadPage: ThreadPage?
-    @State private var page = 1
-    @State private var errorMessage: String?
-    @State private var isLoading = false
+    let initialPostID: UInt64?
+    let reloadID: UUID
+
+    @State private var header: ThreadSummary?
+    @State private var forumID: Int64?
+    @State private var pages = ReaderPages<Post>()
     @State private var selectedPost: Post?
-    @State private var reloadID = UUID()
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                Text(threadPage?.thread.title ?? thread.title).font(.title2.bold()).textSelection(.enabled)
-                if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                    Button("重试") { reloadID = UUID() }
-                }
-                if let threadPage {
-                    if let mainPost = ThreadPageMainPostPolicy.mainPost(in: threadPage) {
-                        postView(mainPost)
+        ScrollViewReader { scroll in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text(header?.title ?? thread.title)
+                        .font(.title2.bold())
+                        .textSelection(.enabled)
+                        .padding(.bottom, 18)
+                        .id("thread-top")
+                    ForEach(pages.items) { post in
+                        VStack(alignment: .leading, spacing: 11) {
+                            HStack {
+                                Text(post.author.displayNameResolved).font(.headline)
+                                Spacer()
+                                Text("\(post.floor) 楼").foregroundStyle(.secondary)
+                            }
+                            MacContentBlocks(blocks: post.blocks)
+                            if post.subpostCount > 0 {
+                                Button("\(post.subpostCount) 条回复") { selectedPost = post }
+                                .buttonStyle(.link)
+                                .accessibilityIdentifier("replies-\(post.id)")
+                            }
+                        }
+                        .padding(.vertical, 15)
+                        .id(post.id)
                         Divider()
                     }
-                    ForEach(threadPage.posts.filter { $0.floor != 1 }) { post in
-                        postView(post)
-                        Divider()
-                    }
-                    HStack {
-                        Button("上一页") {
-                            page = threadPage.currentPage - 1
-                            reloadID = UUID()
-                        }.disabled(threadPage.currentPage <= 1 || isLoading)
-                        Spacer()
-                        Text("第 \(threadPage.currentPage) / \(threadPage.totalPage) 页").foregroundStyle(.secondary)
-                        Spacer()
-                        Button("下一页") {
-                            page = threadPage.currentPage + 1
-                            reloadID = UUID()
-                        }.disabled(threadPage.hasMore == false || isLoading)
-                    }
+                    ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
+                                     loadNext: { pages.loadNext() }, retry: { pages.retry() })
                 }
-                if isLoading { ProgressView().frame(maxWidth: .infinity) }
+                .padding(24)
+                .frame(maxWidth: 860)
+                .frame(maxWidth: .infinity)
             }
-            .padding(24)
-            .frame(maxWidth: 860)
-            .frame(maxWidth: .infinity)
+            .onChange(of: pages.items.first?.id) { old, new in
+                if old == nil, new != nil, let initialPostID,
+                   pages.items.contains(where: { $0.id == initialPostID }) {
+                    scroll.scrollTo(initialPostID, anchor: .top)
+                }
+            }
+            .onChange(of: reloadID) { _, _ in
+                selectedPost = nil
+                scroll.scrollTo("thread-top", anchor: .top)
+                pages.reload()
+            }
         }
-        .navigationTitle(thread.forumDisplayNameResolved ?? "帖子")
+        .navigationTitle(header?.forumDisplayNameResolved ?? thread.forumDisplayNameResolved ?? "帖子")
         .toolbar {
             if let url = URL(string: "https://tieba.baidu.com/p/\(thread.id)") {
                 ShareLink(item: url)
             }
         }
-        .task(id: reloadID) { await loadPage() }
-        .sheet(item: $selectedPost) { post in
-            MacSubpostsView(threadID: thread.id, forumID: threadPage?.forum.id ?? thread.forumID, post: post)
+        .inspector(isPresented: Binding(
+            get: { selectedPost != nil },
+            set: { if !$0 { selectedPost = nil } }
+        )) {
+            if let selectedPost {
+                MacSubpostsView(threadID: thread.id, forumID: forumID ?? thread.forumID, post: selectedPost) {
+                    self.selectedPost = nil
+                }
+                .id(selectedPost.id)
+                .inspectorColumnWidth(min: 260, ideal: 330, max: 440)
+            }
         }
-    }
-
-    private func postView(_ post: Post) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(post.author.displayNameResolved).font(.headline)
-                Spacer()
-                Text("\(post.floor) 楼").foregroundStyle(.secondary)
-            }
-            MacContentBlocks(blocks: post.blocks)
-            if post.subpostCount > 0 {
-                Button("\(post.subpostCount) 条回复") { selectedPost = post }.buttonStyle(.link)
-                    .accessibilityIdentifier("replies-\(post.id)")
-            }
+        .onAppear {
+            if pages.items.isEmpty && pages.request == nil && pages.error == nil { pages.reload() }
+        }
+        .task(id: pages.request) { [request = pages.request] in
+            if let request { await loadPage(request) }
         }
     }
 
     @MainActor
-    private func loadPage() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
+    private func loadPage(_ request: ReaderPages<Post>.Request) async {
+        guard pages.request == request else { return }
+        let requestedPage = request.page
         do {
-            var incoming = try await session.api.threadPage(account: session.account, threadID: thread.id, page: page, forumID: thread.forumID, postID: threadPage == nil ? initialPostID : nil)
+            let incoming = try await session.api.threadPage(
+                account: session.account, threadID: thread.id, page: requestedPage,
+                forumID: forumID ?? thread.forumID, postID: request.replacesItems ? initialPostID : nil
+            )
             try Task.checkCancellation()
-            if ThreadPageMainPostPolicy.mainPost(in: incoming) == nil && threadPage?.mainPost == nil {
-                let recovered = try await session.api.threadPage(account: session.account, threadID: thread.id, page: 1, forumID: incoming.forum.id)
-                try Task.checkCancellation()
-                incoming = ThreadPageMainPostPolicy.merging(incoming, previousMainPost: ThreadPageMainPostPolicy.mainPost(in: recovered), requestedPage: page)
+            var posts = incoming.posts.filter { $0.floor != 1 }
+            if request.replacesItems {
+                var mainPost = ThreadPageMainPostPolicy.mainPost(in: incoming)
+                if mainPost == nil {
+                    let first = try await session.api.threadPage(
+                        account: session.account, threadID: thread.id, page: 1, forumID: incoming.forum.id
+                    )
+                    try Task.checkCancellation()
+                    mainPost = ThreadPageMainPostPolicy.mainPost(in: first)
+                }
+                guard let mainPost else { throw TiebaAPIError.missingMainPost }
+                posts.insert(mainPost, at: 0)
             }
-            incoming = ThreadPageMainPostPolicy.merging(incoming, previousMainPost: threadPage?.mainPost, requestedPage: page)
-            guard ThreadPageMainPostPolicy.mainPost(in: incoming) != nil else {
-                throw TiebaAPIError.missingMainPost
-            }
-            threadPage = incoming
-            page = incoming.currentPage
-        } catch is CancellationError {
+            guard pages.request == request else { return }
+            header = incoming.thread
+            forumID = incoming.forum.id
+            pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)
         } catch {
-            guard Task.isCancelled == false else { return }
-            errorMessage = ReaderErrorMessage.message(for: error)
+            if !Task.isCancelled { pages.fail(error, for: request) }
         }
     }
 }
 
 private struct MacSubpostsView: View {
     @EnvironmentObject private var session: MacSession
-    @Environment(\.dismiss) private var dismiss
     let threadID: Int64
     let forumID: Int64?
     let post: Post
-    @State private var subposts: [Subpost] = []
-    @State private var page = 1
-    @State private var isLoading = false
-    @State private var hasMore = false
-    @State private var errorMessage: String?
-    @State private var reloadID = UUID()
+    let close: () -> Void
+
+    @State private var pages = ReaderPages<Subpost>()
 
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack {
                 Text("\(post.floor) 楼的回复").font(.headline)
                 Spacer()
-                Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
-            }.padding()
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
-            List(subposts) { subpost in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(subpost.author.displayNameResolved).font(.headline)
-                    MacContentBlocks(blocks: subpost.blocks)
-                }.padding(.vertical, 8)
+                Button(action: close) { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("关闭楼中楼")
+                    .accessibilityIdentifier("close-subposts")
             }
-            if isLoading { ProgressView() }
-            if hasMore || errorMessage != nil {
-                Button(errorMessage == nil ? "加载更多" : "重试") { reloadID = UUID() }.disabled(isLoading)
+            .padding(14)
+            Divider()
+            if let forumID, forumID > 0 {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(pages.items) { subpost in
+                            Text(subpost.author.displayNameResolved).font(.headline)
+                            MacContentBlocks(blocks: subpost.blocks)
+                            Divider()
+                        }
+                        if pages.items.isEmpty && pages.request == nil && pages.error == nil {
+                            Text("暂无回复").foregroundStyle(.secondary)
+                        }
+                        ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
+                                         loadNext: { pages.loadNext() }, retry: { pages.retry() })
+                    }
+                    .padding(14)
+                }
+                .onAppear { if pages.items.isEmpty && pages.request == nil && pages.error == nil { pages.reload() } }
+                .task(id: pages.request) { [request = pages.request] in
+                    guard let request, pages.request == request else { return }
+                    do {
+                        let incoming = try await session.api.subposts(account: session.account, threadID: threadID,
+                                                                      postID: post.id, forumID: forumID, page: request.page)
+                        try Task.checkCancellation()
+                        let count = Set(pages.items.map(\.id)).union(incoming.map(\.id)).count
+                        pages.accept(incoming, nextPage: !incoming.isEmpty && count < post.subpostCount ? request.page + 1 : nil,
+                                     for: request)
+                    } catch {
+                        if !Task.isCancelled { pages.fail(error, for: request) }
+                    }
+                }
+            } else {
+                ContentUnavailableView("暂时无法载入回复", systemImage: "exclamationmark.bubble")
             }
         }
-        .padding(.bottom)
-        .frame(width: 620, height: 540)
-        .task(id: reloadID) {
-            guard let forumID, forumID > 0 else {
-                errorMessage = "缺少贴吧 ID，无法加载回复。"
-                return
-            }
-            isLoading = true
-            errorMessage = nil
-            defer { isLoading = false }
-            do {
-                let incoming = try await session.api.subposts(account: session.account, threadID: threadID, postID: post.id, forumID: forumID, page: page)
-                try Task.checkCancellation()
-                var ids = Set(subposts.map(\.id))
-                subposts += incoming.filter { ids.insert($0.id).inserted }
-                hasMore = incoming.isEmpty == false && subposts.count < post.subpostCount
-                page += 1
-            } catch is CancellationError {
-            } catch {
-                guard Task.isCancelled == false else { return }
-                errorMessage = ReaderErrorMessage.message(for: error)
-            }
-        }
+        .onExitCommand(perform: close)
     }
 }
 
@@ -181,7 +195,8 @@ struct MacContentBlocks: View {
                     } else { Text(TiebaEmoticon.displayText(for: code)) }
                 case let .image(image):
                     if let url = image.originalURL ?? image.thumbnailURL {
-                        MacRemoteImage(url: url).frame(maxHeight: 480)
+                        MacRemoteImage(url: url)
+                            .frame(maxWidth: image.width > 0 ? min(CGFloat(image.width), 812) : nil, maxHeight: 480)
                     }
                 case let .video(video):
                     if let url = video.videoURL ?? video.webURL {
@@ -195,42 +210,5 @@ struct MacContentBlocks: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct MacRemoteImage: View {
-    let url: URL
-    @State private var image: NSImage?
-    @State private var errorMessage: String?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(nsImage: image).resizable().scaledToFit()
-                    .contextMenu {
-                        ShareLink(item: url) { Text("分享图片链接") }
-                    }
-            } else if let errorMessage {
-                Label(errorMessage, systemImage: "photo.badge.exclamationmark")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else { ProgressView().controlSize(.small) }
-        }
-        .task(id: url) {
-            do {
-                let payload = try await TiebaImageDownloadClient.shared.download(from: url)
-                let decoded = try await Task.detached(priority: .userInitiated) {
-                    guard let source = CGImageSourceCreateWithData(payload.data as CFData, nil),
-                          let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                            kCGImageSourceCreateThumbnailFromImageAlways: true,
-                            kCGImageSourceCreateThumbnailWithTransform: true,
-                            kCGImageSourceThumbnailMaxPixelSize: 1600
-                          ] as CFDictionary) else { throw TiebaImageDownloadError.invalidImageData }
-                    return NSImage(cgImage: thumbnail, size: .zero)
-                }.value
-                try Task.checkCancellation()
-                image = decoded
-            } catch is CancellationError {
-            } catch { errorMessage = "图片加载失败" }
-        }
     }
 }

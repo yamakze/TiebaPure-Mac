@@ -21,6 +21,7 @@ final class ScreenshotTests: XCTestCase {
             app.launch()
             let row = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "确定性主帖：回复筛选与媒体布局")).firstMatch
             XCTAssertTrue(row.waitForExistence(timeout: 15))
+            XCTAssertTrue(app.descendants(matching: .any)["thread-1101-0"].firstMatch.waitForExistence(timeout: 10))
             capture("01-home-\(appearance)")
             row.click()
             let replies = app.descendants(matching: .any)["replies-2002"].firstMatch
@@ -29,28 +30,31 @@ final class ScreenshotTests: XCTestCase {
             replies.click()
             XCTAssertTrue(app.staticTexts["楼中楼合成回复一"].waitForExistence(timeout: 10))
             capture("03-subposts-\(appearance)")
-            app.buttons["关闭"].click()
+            XCTAssertTrue(app.staticTexts["连续加载的第三楼回复"].exists)
+            app.buttons["close-subposts"].click()
+            app.typeKey("[", modifierFlags: .command)
+            XCTAssertTrue(row.waitForExistence(timeout: 10))
+            app.typeKey("]", modifierFlags: .command)
+            XCTAssertTrue(replies.waitForExistence(timeout: 10))
             app.buttons["chevron.backward"].click()
             XCTAssertTrue(row.waitForExistence(timeout: 10))
-            // Switching section clears the thread route; no list and detail coexist.
-            app.staticTexts["section-forum"].click()
-            let query = app.textFields["reader-query"]
+            app.typeKey("2", modifierFlags: .command)
+            XCTAssertTrue(app.staticTexts["最近访问"].waitForExistence(timeout: 10))
+            let query = app.searchFields.firstMatch
             XCTAssertTrue(query.waitForExistence(timeout: 10))
             capture("04-forum-entry-\(appearance)")
             query.click()
-            query.typeText("Swift")
-            app.buttons["打开"].click()
+            query.typeText("Swift\r")
             XCTAssertTrue(row.waitForExistence(timeout: 10))
             capture("05-forum-\(appearance)")
-            app.staticTexts["section-search"].click()
-            XCTAssertTrue(query.waitForExistence(timeout: 10))
+            app.typeKey("3", modifierFlags: .command)
+            XCTAssertTrue(app.staticTexts["历史搜索词"].waitForExistence(timeout: 10))
             capture("06-search-entry-\(appearance)")
-            query.click()
-            query.typeText("Swift")
-            app.buttons["搜索"].click()
-            XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Swift 的确定性搜索结果")).firstMatch.waitForExistence(timeout: 10))
+            app.typeKey("f", modifierFlags: .command)
+            app.typeText("Swift\r")
+            XCTAssertTrue(app.descendants(matching: .any)["thread-1001-2002"].firstMatch.waitForExistence(timeout: 10))
             capture("07-search-\(appearance)")
-            app.buttons["登录百度账号"].click()
+            app.buttons["account-login"].click()
             XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 15))
             // Third-party content is not a fixture: wait for the form, then capture
             // its actual state even if the remote page cannot finish loading.
@@ -76,6 +80,51 @@ final class ScreenshotTests: XCTestCase {
             capture("10-home-\(state.lowercased())")
             app.terminate()
         }
+    }
+
+    func testPaginationRetryAndAccount() {
+        app.launchArguments = ["SCREENSHOT_FIXTURES", "SCREENSHOT_PAGINATION", "SCREENSHOT_ACCOUNT"]
+        app.launch()
+        let retry = app.descendants(matching: .any)["reader-retry"].firstMatch
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1001-0"].firstMatch.exists)
+        capture("11-home-pagination-retry")
+        retry.click()
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1101-0"].firstMatch.waitForExistence(timeout: 10))
+
+        let account = app.descendants(matching: .any)["account-menu"].firstMatch
+        XCTAssertTrue(account.waitForExistence(timeout: 10))
+        capture("12-home-account")
+        account.click()
+        app.menuItems["个人主页"].click()
+        XCTAssertTrue(app.staticTexts["粉丝"].waitForExistence(timeout: 10))
+        capture("13-account-profile")
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        account.click()
+        app.menuItems["退出登录"].click()
+        XCTAssertTrue(app.buttons["account-login"].waitForExistence(timeout: 10))
+    }
+
+    func testWindowCommandsAndHistory() {
+        app.launchArguments = ["SCREENSHOT_FIXTURES", "SCREENSHOT_REFRESH"]
+        app.launch()
+        let first = app.descendants(matching: .any)["thread-1001-0"].firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        app.typeKey("r", modifierFlags: .command)
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1099-0"].firstMatch.waitForExistence(timeout: 10))
+
+        app.typeKey("f", modifierFlags: .command)
+        let query = app.searchFields.firstMatch
+        XCTAssertTrue(query.waitForExistence(timeout: 10))
+        app.typeText("draft")
+        XCTAssertEqual(query.value as? String, "draft")
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        app.typeText("x")
+        XCTAssertNotEqual(query.value as? String, "draftx")
+        app.buttons["清空历史"].click()
+        XCTAssertTrue(app.staticTexts["暂无搜索记录"].waitForExistence(timeout: 10))
+        app.typeKey("1", modifierFlags: .command)
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
     }
 
     private func capture(_ name: String, window: XCUIElement? = nil) {

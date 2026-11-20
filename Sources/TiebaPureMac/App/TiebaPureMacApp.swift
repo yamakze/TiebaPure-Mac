@@ -8,7 +8,9 @@ struct TiebaPureMacApp: App {
     var body: some Scene {
         WindowGroup("TiebaPure-Mac", id: "reader") {
             Group {
-                if session.isReady { MacReaderView() }
+                if session.isReady {
+                    MacReaderView(recentForums: session.recentForums, searchHistory: session.searchHistory)
+                }
                 else { ProgressView() }
             }
                 .environmentObject(session)
@@ -17,6 +19,7 @@ struct TiebaPureMacApp: App {
                 .task { await session.load() }
         }
         .defaultSize(width: 1180, height: 800)
+        .commands { MacReaderCommands() }
         Settings {
             Form {
                 Picker("外观", selection: Binding(

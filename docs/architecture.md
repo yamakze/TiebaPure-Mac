@@ -8,8 +8,8 @@ TiebaPure-Mac 基于上游 `5a87225` 建立独立的原生 macOS 客户端，仅
 
 1. `App/TiebaPureMacApp.swift` 定义窗口与设置场景。
 2. `App/MacSession.swift` 在应用级持有账号、API 与会话失效订阅。
-3. `App/MacReaderView.swift` 在窗口内持有栏目、查询、列表分页与 NavigationStack 路径（侧栏 + 单一内容区，帖子入栈阅读）。
-4. `App/MacThreadView.swift` 持有当前帖子页与楼中楼展示，消费领域内容块。
+3. `App/MacReaderView.swift` 在窗口内持有栏目、查询及导航路径。菜单命令通过焦点场景指向当前窗口。
+4. `App/MacThreadView.swift` 持有连续楼层与楼中楼 Inspector 的状态。首页列表、帖子和楼中楼复用 `ReaderPages` 的请求标识、去重和重试页码。
 5. `Infrastructure/Network/TiebaAPIService.swift` 是业务 API 边界，各协议实现负责签名、请求与响应验证。
 6. `Domain/Mapping` 将协议数据映射成领域模型，`Infrastructure/State` 保留写操作协调与会话失效边界。
 
@@ -29,4 +29,4 @@ Mac 从新的存储命名空间开始，不导入 iOS 沙箱。删除 iOS 16 文
 
 ## 后续验收
 
-先验收匿名首页、进吧、搜索与长帖阅读，再验证真实登录。图片加载缓存、完整图文排版、内嵌媒体播放及账号写操作界面尚未完成；具体功能状态以 README 为准。当前编译和 fixture 测试不构成线上服务、真实账号或发布签名验收。
+先验收匿名首页、进吧、搜索与长帖阅读，再验证真实登录。正文图片缓存、完整图文排版、内嵌媒体播放及账号写操作界面尚未完成；具体功能状态以 README 为准。当前编译和 fixture 测试不构成线上服务、真实账号或发布签名验收。

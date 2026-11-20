@@ -10,20 +10,33 @@ final class MacSession: ObservableObject {
 
     let api: any TiebaAPIService
     let accountStore: AccountStore
+    private(set) lazy var recentForums = RecentForumStore.shared
+    private(set) lazy var searchHistory = SearchHistoryStore.shared
     private let logoutCoordinator: LogoutCoordinator
     private var subscriptions = Set<AnyCancellable>()
-    private var isLoggingOut = false
+    @Published private(set) var isLoggingOut = false
     private var didStartLoading = false
 
     init() {
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("SCREENSHOT_FIXTURES") {
             let arguments = ProcessInfo.processInfo.arguments
-            let scenario: FixtureScenario = arguments.contains("SCREENSHOT_EMPTY") ? .empty
-                : arguments.contains("SCREENSHOT_ERROR") ? .error : .success
+            let scenario: FixtureScenario
+            if arguments.contains("SCREENSHOT_EMPTY") { scenario = .empty }
+            else if arguments.contains("SCREENSHOT_ERROR") { scenario = .error }
+            else if arguments.contains("SCREENSHOT_PAGINATION") { scenario = .macReaderRetry }
+            else if arguments.contains("SCREENSHOT_REFRESH") { scenario = .refreshUpdate }
+            else { scenario = .macReader }
             api = FixtureTiebaAPI(scenario: scenario, delayMilliseconds: arguments.contains("SCREENSHOT_LOADING") ? 60_000 : 0)
             accountStore = AccountStore(service: MemoryAccountStoreService())
-            logoutCoordinator = LogoutCoordinator(accountStore: accountStore)
+            logoutCoordinator = LogoutCoordinator(accountStore: accountStore, artifactCleaner: ScreenshotSessionCleaner())
+            recentForums = RecentForumStore(key: "fixture.recentForums", persistence: ScreenshotHistory<RecentForum>())
+            searchHistory = SearchHistoryStore(key: "fixture.searchHistory", persistence: ScreenshotHistory<String>())
+            recentForums.save(FixtureTiebaAPI.forum)
+            recentForums.save(FixtureTiebaAPI.forumTwo)
+            searchHistory.record("SwiftUI")
+            searchHistory.record("macOS")
+            observeAccount()
             return
         }
 #endif
@@ -43,9 +56,7 @@ final class MacSession: ObservableObject {
         )
         accountStore = store
         logoutCoordinator = LogoutCoordinator(accountStore: store)
-        store.accountDidChange.sink { [weak self] account in
-            self?.account = account
-        }.store(in: &subscriptions)
+        observeAccount()
         monitor.expiredSessions.sink { [weak self] session in
             guard let self, self.account?.sessionIdentity == session, self.isLoggingOut == false else { return }
             Task {
@@ -56,10 +67,22 @@ final class MacSession: ObservableObject {
         }.store(in: &subscriptions)
     }
 
+    private func observeAccount() {
+        accountStore.accountDidChange.sink { [weak self] account in
+            self?.account = account
+        }.store(in: &subscriptions)
+    }
+
     func load() async {
         guard didStartLoading == false else { return }
         didStartLoading = true
         do {
+#if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("SCREENSHOT_ACCOUNT"),
+               ProcessInfo.processInfo.arguments.contains("SCREENSHOT_FIXTURES") {
+                try await accountStore.save(FixtureTiebaAPI.account)
+            }
+#endif
             account = try await accountStore.load()
         } catch {
             errorMessage = ReaderErrorMessage.message(for: error)
