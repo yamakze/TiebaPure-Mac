@@ -21,7 +21,7 @@ ditto artifacts/macos/TiebaPure-Mac.app "$APP"
 codesign --force --sign - "$APP"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
 # Generate a disposable standalone UI-test runner; SwiftPM remains the app's source of truth.
-python3 scripts/screenshot-project.py "$ROOT" "$APP"
+python3 "$ROOT/scripts/lib/screenshot-project.py" "$ROOT" "$APP"
 xcodebuild test -project "$WORK/ScreenshotRunner.xcodeproj" -scheme Screenshots \
     -destination 'platform=macOS' -derivedDataPath "$WORK/DerivedData" \
     -resultBundlePath "$OUTPUT/Review.xcresult" \

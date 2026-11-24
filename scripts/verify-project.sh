@@ -34,12 +34,15 @@ if 'name: "TiebaPure-Mac"' not in manifest:
     raise SystemExit('SwiftPM package differs from the app name.')
 if 'platforms: [.macOS(.v14)]' not in manifest:
     raise SystemExit('Package platform differs from app deployment policy.')
+if 'defaultLocalization: "zh-Hans"' not in manifest:
+    raise SystemExit('Package defaultLocalization differs from app deployment policy.')
 version = re.search(r'swift-protobuf\.git", exact: "([^"]+)"', manifest).group(1)
 generator = Path('scripts/generate-protos.sh').read_text()
 if f'EXPECTED_SWIFT_PROTOBUF_VERSION="{version}"' not in generator:
     raise SystemExit('Protobuf generator/runtime versions differ.')
-for name in ['LICENSE', 'NOTICE.md', 'LICENSES/SwiftProtobuf-Apache-2.0.txt', 'LICENSES/Sparkle.txt']:
+for name in ['LICENSE', 'NOTICE.md', 'LICENSES/README.md', 'LICENSES/SwiftProtobuf-Apache-2.0.txt', 'LICENSES/Sparkle.txt', 'Resources/TiebaPureMac.entitlements']:
     if not Path(name).is_file():
-        raise SystemExit(f'Missing attribution: {name}')
+        raise SystemExit(f'Missing project file: {name}')
 print('Native Mac project boundaries, versions, and notices verified.')
 PY
+scripts/check-localization.py

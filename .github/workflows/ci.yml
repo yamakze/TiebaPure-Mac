@@ -3,7 +3,9 @@ name: macOS CI
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', 'README*', 'local/**', '*.md']
   pull_request:
+    paths-ignore: ['docs/**', 'README*', 'local/**', '*.md']
   workflow_dispatch:
 
 permissions:

@@ -51,24 +51,28 @@ done
 ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework \
     "$APP/Contents/Frameworks/Sparkle.framework"
 
-if [[ -n "${SPARKLE_PUBLIC_KEY:-}" ]]; then
+PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
+if [[ -z "$PUBLIC_KEY" && -f "Resources/SparklePublicKey.txt" ]]; then
+    PUBLIC_KEY="$(tr -d ' \n\r\t' < Resources/SparklePublicKey.txt)"
+fi
+
+if [[ -n "$PUBLIC_KEY" ]]; then
     if [[ "$CONFIGURATION" != release ]]; then
         echo "Sparkle update configuration requires a release build." >&2
         exit 2
     fi
-    python3 - "$APP/Contents/Info.plist" <<'PY'
+    python3 - "$APP/Contents/Info.plist" "$PUBLIC_KEY" <<'PY'
 import base64
-import os
 import plistlib
 import sys
 from pathlib import Path
 
-key = os.environ["SPARKLE_PUBLIC_KEY"]
+key = sys.argv[2]
 try:
     if len(base64.b64decode(key, validate=True)) != 32:
         raise ValueError
 except ValueError:
-    raise SystemExit("SPARKLE_PUBLIC_KEY must be a base64 Ed25519 public key")
+    raise SystemExit("Sparkle public key must be a base64 Ed25519 public key")
 
 path = Path(sys.argv[1])
 info = plistlib.loads(path.read_bytes())
@@ -96,7 +100,12 @@ for component in "$version/XPCServices/Installer.xpc" "$version/XPCServices/Down
                  "$version/Autoupdate" "$version/Updater.app" "$framework"; do
     codesign --force --sign "$IDENTITY" "${SIGN_OPTIONS[@]}" --preserve-metadata=entitlements "$component"
 done
-codesign --force --sign "$IDENTITY" "${SIGN_OPTIONS[@]}" "$APP"
+ENTITLEMENTS="Resources/TiebaPureMac.entitlements"
+APP_SIGN_OPTIONS=("${SIGN_OPTIONS[@]}")
+if [[ -f "$ENTITLEMENTS" ]]; then
+    APP_SIGN_OPTIONS+=(--entitlements "$ENTITLEMENTS")
+fi
+codesign --force --sign "$IDENTITY" "${APP_SIGN_OPTIONS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
 
 TARGET="$OUTPUT/TiebaPure-Mac.app"

@@ -2,12 +2,12 @@
 .AppleDouble
 .LSOverride
 
-build/
+/build/
 .derivedData*/
 DerivedData/
-outputs/
-artifacts/
-screenshots/
+/outputs/
+/artifacts/
+/screenshots/
 
 *.ipa
 *.xcarchive
@@ -32,3 +32,5 @@ account.json
 .swiftpm/
 .codegraph/
 .idea/
+/local/
+/AGENTS.md

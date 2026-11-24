@@ -68,6 +68,15 @@ with tempfile.TemporaryDirectory(prefix=".release.", dir=output.parent) as direc
         [tools / "sign_update", "--verify", "--ed-key-file", "-", feed],
         input=private_key, text=True, check=True,
     )
+    binary = app / "Contents" / "MacOS" / "TiebaPureMac"
+    architectures = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).strip()
+    package_notes = work / "PACKAGE_NOTES.md"
+    package_notes.write_text(
+        f"## Downloads\n\n"
+        f"- macOS 14+: `TiebaPure-Mac-{version}.zip` ({architectures}; Developer ID signed and notarized).\n"
+        f"- `SHA256SUMS.txt`: download integrity checksums.\n"
+        f"- `appcast.xml`: Sparkle 2 signed auto-update feed.\n"
+    )
     checksums = work / "SHA256SUMS.txt"
     with checksums.open("w") as manifest:
         for path in (archive, feed):
@@ -75,6 +84,7 @@ with tempfile.TemporaryDirectory(prefix=".release.", dir=output.parent) as direc
             manifest.write(f"{digest}  {path.name}\n")
     output.mkdir(exist_ok=True)
     notes_path.rename(output / "RELEASE_NOTES.md")
+    package_notes.rename(output / "PACKAGE_NOTES.md")
     for path in (archive, feed, checksums):
         path.replace(output / path.name)
 print(output)

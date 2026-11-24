@@ -3,13 +3,22 @@ name: macOS Release
 on:
   push:
     tags: ['mac-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (for example mac-v0.1.0)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: macos-release-${{ github.ref }}
+  group: macos-release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -21,11 +30,12 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
       - name: Check tag and run tests
         run: |
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
-          if [[ "$GITHUB_REF_NAME" != "mac-v$version" ]]; then
+          if [[ "$RELEASE_TAG" != "mac-v$version" ]]; then
             echo 'The release tag must match the version in Resources/Info.plist.' >&2
             exit 1
           fi
@@ -78,11 +88,11 @@ jobs:
       - name: Generate signed Sparkle update feed
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-        run: python3 scripts/release-assets.py "$GITHUB_REF_NAME" artifacts/macos/TiebaPure-Mac.app
+        run: python3 scripts/release-assets.py "$RELEASE_TAG" artifacts/macos/TiebaPure-Mac.app
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos-release
-          path: artifacts/release/${{ github.ref_name }}
+          path: artifacts/release/${{ env.RELEASE_TAG }}
           if-no-files-found: error
 
   draft:
@@ -102,6 +112,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           sha256sum -c SHA256SUMS.txt
-          version=${GITHUB_REF_NAME#mac-v}
-          gh release create "$GITHUB_REF_NAME" "TiebaPure-Mac-$version.zip" appcast.xml SHA256SUMS.txt \
-            --draft --verify-tag --title "TiebaPure-Mac $version" --notes-file RELEASE_NOTES.md
+          version=${RELEASE_TAG#mac-v}
+          python3 - <<'PY'
+          from pathlib import Path
+          notes = Path('RELEASE_NOTES.md').read_text()
+          if Path('PACKAGE_NOTES.md').exists():
+              notes += '\n\n' + Path('PACKAGE_NOTES.md').read_text()
+          Path('notes.md').write_text(notes)
+          PY
+          gh release create "$RELEASE_TAG" "TiebaPure-Mac-$version.zip" appcast.xml SHA256SUMS.txt \
+            --draft --verify-tag --title "TiebaPure-Mac $version" --notes-file notes.md
