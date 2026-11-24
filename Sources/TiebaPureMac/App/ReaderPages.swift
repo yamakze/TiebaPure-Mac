@@ -1,5 +1,36 @@
 import SwiftUI
 
+/// Restores the last visible item when the current section creates a new scroll view.
+struct ReaderScrollView<ID: Hashable, Content: View>: View {
+    @Binding private var position: ID?
+    @State private var initialPosition: ID?
+    @State private var didRestorePosition = false
+    private let content: Content
+
+    init(position: Binding<ID?>, @ViewBuilder content: () -> Content) {
+        _position = position
+        _initialPosition = State(initialValue: position.wrappedValue)
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollViewReader { scroll in
+            ScrollView { content }
+                .scrollPosition(id: Binding(
+                    get: { position },
+                    set: { if didRestorePosition, let visible = $0 { position = visible } }
+                ), anchor: .top)
+                .task {
+                    guard !didRestorePosition else { return }
+                    // Restore explicitly after the targets are mounted. SwiftUI can report the first item
+                    // while rebuilding the viewport, before it applies the stored position.
+                    if let initialPosition { scroll.scrollTo(initialPosition, anchor: .top) }
+                    didRestorePosition = true
+                }
+        }
+    }
+}
+
 /// One outstanding request per list. A reset invalidates results from the old query.
 struct ReaderPages<Item: Identifiable> {
     struct Request: Equatable {

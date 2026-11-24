@@ -39,12 +39,12 @@ It preserves full upstream Git history and original author attributions while re
 
 ## Features
 
-- 🧭 **Desktop Navigation** — Unified sidebar with Home Recommendations, Forum Directory, Search, Followed Forums, and Bookmarks. Supports hierarchical navigation stacks and history traversing.
+- 🧭 **Desktop Navigation** — Switch among Home, Forums, Search, Followed Forums, and Bookmarks and pick up where you left off in each section.
 - 📖 **Seamless Reading Experience** — Continuous floor scrolling, author-only reading, and a native Inspector for subpost discussions.
 - 🔍 **Two-Tier Search** — Site-wide and in-forum keyword search. Recent forums and site-wide search history are saved locally.
 - ⭐ **Account Library** — Follow or unfollow a forum and bookmark or remove a thread. The app reads back changes before updating the sidebar.
 - 🔐 **Isolated Login & Secure Storage** — Official authentication inside isolated WebKit containers. Session credentials are encrypted directly in the macOS Keychain with proactive expiration detection.
-- 🖼️ **Native Media Rendering** — Displays built-in Tieba emoticons and post images, and opens voice and video links externally.
+- 🖼️ **Native Media Rendering** — Click an image in a post or subpost to preview and zoom it. Voice and video links open externally.
 - ⌨️ **Keyboard-Driven Shortcuts** — Complete keyboard shortcuts for section switching, search focus, content refreshing, and history navigation.
 - 🔄 **Automatic Updates** — Integrated Sparkle 2 framework for Ed25519 signature-verified updates directly from GitHub Releases.
 - 🎨 **Adaptive macOS Appearance** — Fluid support for Light and Dark system appearances following Apple Human Interface Guidelines.
@@ -56,7 +56,8 @@ It preserves full upstream Git history and original author attributions while re
 | `⌘1` / `⌘2` / `⌘3` | Switch to Home / Forums / Search |
 | `⌘F` | Focus search bar (in-forum on forum pages, site-wide elsewhere) |
 | `Return` | Submit forum name or search query |
-| `Esc` | Clear search query or exit input focus |
+| `Esc` | Close image preview, clear search input, or exit input focus |
+| `←` / `→` | Move between images in the preview |
 | `⌘R` | Refresh current page, forum, or thread |
 | `⌘[` / `⌘]` | Navigate Back / Forward in history |
 | `⌥⌘1` / `⌥⌘2` | Latest / Relevant for search results, or reply time / publication time for forum topics |

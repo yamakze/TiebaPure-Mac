@@ -38,7 +38,7 @@ final class ScreenshotTests: XCTestCase {
                 app.typeKey("]", modifierFlags: .command)
                 XCTAssertTrue(replies.waitForExistence(timeout: 10))
             }
-            app.buttons["chevron.backward"].click()
+            app.toolbars.buttons["back-to-thread-list"].firstMatch.click()
             XCTAssertTrue(row.waitForExistence(timeout: 10))
             app.typeKey("2", modifierFlags: .command)
             XCTAssertTrue(app.staticTexts["最近访问"].waitForExistence(timeout: 10))
@@ -161,7 +161,6 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.buttons["followed-forum-102"].waitForExistence(timeout: 10))
         XCTAssertFalse(forum.exists)
         app.typeKey("2", modifierFlags: .command)
-        app.buttons["测试吧"].firstMatch.click()
         XCTAssertTrue(follow.waitForExistence(timeout: 10))
         follow.click()
         XCTAssertTrue(unfollow.waitForExistence(timeout: 10))
@@ -201,6 +200,8 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertFalse(app.buttons["Swift"].exists)
         app.typeKey("f", modifierFlags: .command)
         app.typeText("Swift\r")
+        XCTAssertTrue(app.descendants(matching: .any)["thread-1001-2002"].firstMatch.waitForExistence(timeout: 10))
+        chooseViewOption("相关", in: "搜索结果排序")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1002-2002"].firstMatch.waitForExistence(timeout: 10))
         chooseViewOption("最新", in: "搜索结果排序")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1001-2002"].firstMatch.waitForExistence(timeout: 10))
@@ -241,6 +242,114 @@ final class ScreenshotTests: XCTestCase {
         app.menuItems["退出登录"].click()
         XCTAssertTrue(library.waitForNonExistence(timeout: 10))
         XCTAssertTrue(app.windows["首页"].waitForExistence(timeout: 10))
+    }
+
+    func testReaderContinuityAndImagePreview() throws {
+        launchFixture("SCREENSHOT_READING_CONTINUITY", "-io.github.yamakze.TiebaPureMac.appearance", "light")
+        let homeList = app.scrollViews["reader-thread-list"].firstMatch
+        XCTAssertTrue(homeList.waitForExistence(timeout: 10))
+        let homeFirst = app.buttons["thread-1001-0"].firstMatch
+        XCTAssertTrue(homeFirst.waitForExistence(timeout: 10))
+        homeList.scroll(byDeltaX: 0, deltaY: -670)
+        let homeRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "thread-"))
+        let topHomeRow = try XCTUnwrap(topVisibleElement(matching: homeRows, in: homeList)).identifier
+        XCTAssertNotEqual(topHomeRow, homeFirst.identifier)
+
+        app.typeKey("2", modifierFlags: .command)
+        let query = app.toolbars.searchFields.firstMatch
+        query.click()
+        query.typeText("Swift\r")
+        XCTAssertTrue(app.toolbars.buttons["back-to-forum-entry"].firstMatch.waitForExistence(timeout: 10))
+        app.typeKey("f", modifierFlags: .command)
+        app.typeText("local\r")
+        let hit = app.descendants(matching: .any)["thread-1003-2002"].firstMatch
+        XCTAssertTrue(hit.waitForExistence(timeout: 10))
+        hit.click()
+        let floors = app.scrollViews["thread-floors"].firstMatch
+        XCTAssertTrue(floors.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["已定位搜索命中回复"].waitForExistence(timeout: 10))
+        floors.scroll(byDeltaX: 0, deltaY: -950)
+        let floorNumbers = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "post-floor-"))
+        let topFloor = try XCTUnwrap(topVisibleElement(matching: floorNumbers, in: floors)).identifier
+        XCTAssertGreaterThan(topFloor, "post-floor-2003")
+
+        app.typeKey("3", modifierFlags: .command)
+        app.typeKey("f", modifierFlags: .command)
+        app.typeText("global\r")
+        let global = app.descendants(matching: .any)["thread-1001-2002"].firstMatch
+        XCTAssertTrue(global.waitForExistence(timeout: 10))
+        app.typeKey("2", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts[topFloor].waitForExistence(timeout: 10))
+        XCTAssertLessThan(app.staticTexts[topFloor].frame.midY, floors.frame.midY)
+        XCTAssertGreaterThanOrEqual(app.staticTexts[topFloor].frame.midY, floors.frame.minY)
+        let onlyAuthor = app.checkBoxes["only-thread-author"].firstMatch
+        onlyAuthor.click()
+        XCTAssertTrue(app.staticTexts[topFloor].waitForNonExistence(timeout: 10))
+        app.typeKey("3", modifierFlags: .command)
+        XCTAssertTrue(global.waitForExistence(timeout: 10))
+        app.descendants(matching: .any)["section-forum"].firstMatch.click()
+        XCTAssertTrue(onlyAuthor.waitForExistence(timeout: 10))
+        XCTAssertEqual(onlyAuthor.value as? Int, 1)
+        XCTAssertFalse(app.staticTexts[topFloor].exists)
+        app.typeKey("[", modifierFlags: .command)
+        XCTAssertTrue(hit.waitForExistence(timeout: 10))
+        XCTAssertEqual(query.value as? String, "local")
+        app.typeKey("3", modifierFlags: .command)
+        XCTAssertTrue(global.waitForExistence(timeout: 10))
+        XCTAssertEqual(query.value as? String, "global")
+
+        app.typeKey("1", modifierFlags: .command)
+        let restoredRow = app.buttons[topHomeRow].firstMatch
+        XCTAssertTrue(restoredRow.waitForExistence(timeout: 10))
+        XCTAssertLessThan(restoredRow.frame.midY, homeList.frame.midY)
+        XCTAssertGreaterThanOrEqual(restoredRow.frame.midY, homeList.frame.minY)
+        homeList.scroll(byDeltaX: 0, deltaY: 1700)
+        XCTAssertTrue(homeFirst.waitForExistence(timeout: 10))
+        homeFirst.click()
+
+        let image = app.buttons["post-image-2"].firstMatch
+        XCTAssertTrue(image.waitForExistence(timeout: 10))
+        image.click()
+        let preview = app.images["image-preview-display"].firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        let position = app.staticTexts["image-preview-position"].firstMatch
+        XCTAssertEqual(position.value as? String, "1 / 2")
+        capture("19-image-preview")
+        let zoom = app.buttons["image-preview-zoom-in"].firstMatch
+        XCTAssertTrue(zoom.isEnabled)
+        zoom.click()
+        app.typeKey(XCUIKeyboardKey.rightArrow.rawValue, modifierFlags: [])
+        XCTAssertEqual(position.value as? String, "2 / 2")
+        let retry = app.buttons["image-preview-retry"].firstMatch
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        capture("20-image-preview-retry")
+        retry.click()
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        app.typeKey(XCUIKeyboardKey.leftArrow.rawValue, modifierFlags: [])
+        XCTAssertEqual(position.value as? String, "1 / 2")
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        XCTAssertTrue(app.buttons["image-preview-close"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(image.isHittable)
+
+        floors.scroll(byDeltaX: 0, deltaY: -350)
+        let replies = app.descendants(matching: .any)["replies-2002"].firstMatch
+        XCTAssertTrue(replies.waitForExistence(timeout: 10))
+        replies.click()
+        let inlineReplyImage = app.buttons["post-image-1"].firstMatch
+        XCTAssertTrue(inlineReplyImage.waitForExistence(timeout: 10))
+        inlineReplyImage.click()
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        app.typeKey(XCUIKeyboardKey.escape.rawValue, modifierFlags: [])
+        XCTAssertTrue(app.buttons["image-preview-close"].waitForNonExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["close-subposts"].waitForExistence(timeout: 10))
+    }
+
+    private func topVisibleElement(matching query: XCUIElementQuery, in scrollView: XCUIElement) -> XCUIElement? {
+        let bounds = scrollView.frame
+        return query.allElementsBoundByIndex
+            .filter { $0.frame.midY >= bounds.minY && $0.frame.midY < bounds.midY }
+            .min { $0.frame.minY < $1.frame.minY }
     }
 
     private func chooseViewOption(_ option: String, in submenu: String) {

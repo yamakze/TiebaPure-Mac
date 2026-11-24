@@ -42,6 +42,10 @@ struct FixtureTiebaAPI: TiebaAPIService {
     let delayNanoseconds: UInt64
     private let state: FixtureRequestState
 
+    private var testsReadingContinuity: Bool {
+        scenario == .macReader && ProcessInfo.processInfo.arguments.contains("SCREENSHOT_READING_CONTINUITY")
+    }
+
     init(scenario: FixtureScenario = .success, delayMilliseconds: Int = 0) {
         self.scenario = scenario
         delayNanoseconds = UInt64(max(delayMilliseconds, 0)) * 1_000_000
@@ -332,6 +336,12 @@ struct FixtureTiebaAPI: TiebaAPIService {
            scenario != .scrollPerformance || ["mixed", "production"].contains(scrollVariant) {
             mainBlocks.append(.image(longImage))
         }
+        if testsReadingContinuity {
+            var secondImage = longImage
+            secondImage.thumbnailURL = URL(string: "https://fixture-success.invalid/second-thumbnail.png")
+            secondImage.originalURL = URL(string: "https://fixture.invalid/unavailable-original.png")
+            mainBlocks.append(.image(secondImage))
+        }
         let fixtureMain = Post(
             id: 2001,
             threadID: threadID,
@@ -405,7 +415,16 @@ struct FixtureTiebaAPI: TiebaAPIService {
         var posts = page == 1
             ? (omitsMainPost ? replies + submittedPosts : [main] + replies + submittedPosts)
             : []
-        if scenario == .macReader && page == 2 {
+        if testsReadingContinuity && page == 1 && !seeLz {
+            for number in 3...44 {
+                var floor = reply
+                floor.id = UInt64(2_000 + number)
+                floor.floor = number
+                floor.blocks = [.text("阅读位置样例 \(number)")]
+                floor.subpostCount = 0
+                posts.append(floor)
+            }
+        } else if scenario == .macReader && page == 2 {
             var next = reply
             next.id = 2003
             next.floor = 3
@@ -424,8 +443,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
             mainPost: omitsMainPost ? nil : main,
             posts: posts,
             currentPage: page,
-            totalPage: scenario == .macReader && !seeLz ? 2 : 1,
-            hasMore: scenario == .macReader && !seeLz && page == 1,
+            totalPage: scenario == .macReader && !testsReadingContinuity && !seeLz ? 2 : 1,
+            hasMore: scenario == .macReader && !testsReadingContinuity && !seeLz && page == 1,
             isCollected: isCollected
         )
     }
@@ -448,6 +467,14 @@ struct FixtureTiebaAPI: TiebaAPIService {
             fixtureSubposts = Self.largeLikeCountSubpostFixtures
         case .subpostReference:
             fixtureSubposts = Self.referenceSubpostFixtures
+        case .macReader where testsReadingContinuity:
+            var replies = Self.subpostFixtures
+            replies[0].blocks.append(.image(ImageContent(
+                thumbnailURL: URL(string: "https://fixture-success.invalid/subpost-thumbnail.png"),
+                originalURL: URL(string: "https://fixture-success.invalid/subpost-original.png"),
+                width: 160, height: 160, showOriginalButton: true
+            )))
+            fixtureSubposts = replies
         default:
             fixtureSubposts = Self.subpostFixtures
         }
@@ -808,6 +835,13 @@ struct FixtureTiebaAPI: TiebaAPIService {
 
     private var personalizedFixtureThreads: [ThreadSummary] {
         switch scenario {
+        case .macReader where testsReadingContinuity:
+            return (0..<30).map { index in
+                var thread = Self.threads[0]
+                thread.id = Int64(1_001 + index)
+                thread.title = "首页位置样例 \(index + 1)"
+                return thread
+            }
         case .imageGesture, .macReader:
             return threadsWithSyntheticMediaURLs(Self.threads, pathPrefix: "home")
         case .voicePlayback:

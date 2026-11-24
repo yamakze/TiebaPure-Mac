@@ -1,37 +1,23 @@
 import SwiftUI
 
-private struct MacThreadDestination: Identifiable, Hashable {
+private struct MacThreadDestination: Identifiable {
     let thread: ThreadSummary
     var matchedPostID: UInt64? = nil
     var markedPostID: UInt64? = nil
     var id: String { "\(thread.id)-\(matchedPostID ?? 0)" }
-
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct MacReaderView: View {
     @EnvironmentObject private var session: MacSession
-    @ObservedObject var recentForums: RecentForumStore
-    @ObservedObject var searchHistory: SearchHistoryStore
+    let recentForums: RecentForumStore
+    let searchHistory: SearchHistoryStore
 
     @State private var section: ReaderSection = .home
-    @State private var input = ""
-    @State private var query = ""
-    @State private var forum: Forum?
-    @State private var forumSort = ForumThreadCategory.replyTime
-    @State private var onlyFeatured = false
-    @State private var searchSort = ReaderSearchSort.latest
-    @State private var searchPresented = false
-    @State private var searchFocusRequest: UUID?
-    @State private var path: [MacThreadDestination] = []
-    @State private var forwardDestination: MacThreadDestination?
-    @State private var pages = ReaderPages<MacThreadDestination>()
-    @State private var followed = ReaderPages<Forum>()
-    @State private var threadReload = UUID()
+    @State private var sections = MacReaderWorkspace()
     @State private var showsLogin = false
     @State private var showsProfile = false
-    @State private var historyError: String?
+
+    private var state: MacReaderSectionState { sections[section] }
 
     var body: some View {
         NavigationSplitView {
@@ -55,159 +41,23 @@ struct MacReaderView: View {
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
             .safeAreaInset(edge: .bottom, spacing: 0) { accountBar }
         } detail: {
-            NavigationStack(path: Binding(
-                get: { path }, set: { next in
-                    forwardDestination = next.isEmpty ? path.last : nil
-                    path = next
-                }
-            )) {
-                Group {
-                    switch section {
-                    case .home, .favorites:
-                        threadList
-                    case .followedForums:
-                        followedForumList
-                    case .forum, .search:
-                        threadList
-                            .searchable(text: $input, isPresented: $searchPresented, placement: .toolbar,
-                                        prompt: Text(section == .forum ? (forum == nil ? "贴吧名称" : "搜索吧内帖子") : "搜索帖子"))
-                            .task(id: searchFocusRequest) {
-                                guard section == .forum || section == .search,
-                                      path.isEmpty, searchFocusRequest != nil else { return }
-                                searchFocusRequest = nil
-                                searchPresented = true
-                            }
-                            .onSubmit(of: .search) { submit(input) }
-                            .onChange(of: input) { _, value in
-                                if isInForum && value.isEmpty && !query.isEmpty {
-                                    query = ""
-                                    forwardDestination = nil
-                                    pages.reload(clear: true)
-                                }
-                            }
-                            .onExitCommand {
-                                if input.isEmpty { searchPresented = false }
-                                else { input = "" }
-                            }
-                            .searchSuggestions {
-                                if acceptsThreadSearch && (section == .search || !input.isEmpty)
-                                    && (query.isEmpty || input != query) {
-                                    ForEach(searchHistory.items.filter {
-                                        input.isEmpty || $0.localizedCaseInsensitiveContains(input)
-                                    }.prefix(8), id: \.self) { keyword in
-                                        Button { submit(keyword) } label: {
-                                            Label(keyword, systemImage: "clock")
-                                        }
-                                    }
-                                }
-                            }
-                    }
-                }
-                .navigationTitle(navigationTitle)
-                .toolbar {
-                    if isInForum && path.isEmpty {
-                        ToolbarItem(placement: .navigation) {
-                            Button("返回进吧", systemImage: "chevron.backward") { show(.forum) }
-                                .help("返回进吧")
-                                .accessibilityIdentifier("back-to-forum-entry")
-                        }
-                        if let forum, let account = session.account {
-                            ToolbarItem(placement: .primaryAction) {
-                                MacForumFollowButton(forum: forum, account: account)
-                                    .id(account.sessionIdentity)
-                                    .id(forum.name)
-                            }
-                        }
-                    }
-                }
-                .navigationDestination(for: MacThreadDestination.self) { destination in
-                    MacThreadView(thread: destination.thread,
-                                  initialPostID: destination.matchedPostID ?? destination.markedPostID, reloadID: threadReload)
-                }
-            }
+            MacReaderSectionView(state: state, recentForums: recentForums, searchHistory: searchHistory,
+                                 openFollowedForum: openFollowedForum)
+                .id(state.id)
         }
-        .focusedSceneValue(\.macReaderActions, MacReaderActions(
-            show: show,
-            find: {
-                if section != .forum && section != .search { show(.search) }
-                path = []
-                searchFocusRequest = UUID()
-            },
-            reload: canReload ? reload : nil,
-            back: path.isEmpty ? nil : {
-                forwardDestination = path.popLast()
-            },
-            forward: path.isEmpty && forwardDestination != nil ? {
-                if let forwardDestination { path = [forwardDestination] }
-                forwardDestination = nil
-            } : nil,
-            searchSort: path.isEmpty && (section == .search || (isInForum && !query.isEmpty)) ? Binding(
-                get: { searchSort },
-                set: { value in
-                    guard searchSort != value else { return }
-                    searchSort = value
-                    if !query.isEmpty {
-                        forwardDestination = nil
-                        pages.reload(clear: true)
-                    }
-                }
-            ) : nil,
-            forumSort: showsForumTopics ? Binding(
-                get: { forumSort },
-                set: { value in
-                    guard let forum, forumSort != value else { return }
-                    session.forumSort.select(value, for: forum)
-                    forumSort = value
-                    forwardDestination = nil
-                    pages.reload(clear: true)
-                }
-            ) : nil,
-            onlyFeatured: showsForumTopics ? Binding(
-                get: { onlyFeatured },
-                set: { value in
-                    guard onlyFeatured != value else { return }
-                    onlyFeatured = value
-                    forwardDestination = nil
-                    pages.reload(clear: true)
-                }
-            ) : nil
-        ))
+        .focusedSceneValue(\.macReaderActions, readerActions)
         .onChange(of: session.account?.sessionIdentity) { _, _ in
-            path = []
-            forwardDestination = nil
-            if section.requiresAccount && session.account == nil {
-                show(.home)
-            } else if section == .followedForums {
-                followed.reload(clear: true)
-            } else if canReload {
-                pages.reload(clear: true)
-            }
-        }
-        .task(id: pages.request) { [request = pages.request] in
-            if let request { await loadThreads(request) }
-        }
-        .task(id: followed.request) { [request = followed.request] in
-            guard let request, let account = session.account else { return }
-            do {
-                let forums = try await session.api.followedForums(account: account)
-                try Task.checkCancellation()
-                guard account.sessionIdentity == session.account?.sessionIdentity else { return }
-                let reconciled = session.relationships.reconciledFollowedForums(accountID: account.id, loaded: forums)
-                session.relationships.seedFollowedForums(accountID: account.id, forums: reconciled)
-                followed.accept(reconciled, nextPage: nil, for: request)
-            } catch {
-                if !Task.isCancelled { followed.fail(error, for: request) }
-            }
+            sections = MacReaderWorkspace()
+            if section.requiresAccount && session.account == nil { section = .home }
         }
         .onReceive(session.relationships.forumFollowDidChange) { change in
-            if section == .followedForums, change.accountID == session.account?.id { followed.reload(clear: true) }
+            if change.accountID == session.account?.id { sections[.followedForums].followed.reload() }
         }
         .onReceive(session.favoriteDidChange) { change in
-            if section == .favorites, change.session == session.account?.sessionIdentity { pages.reload(clear: true) }
-        }
-        .onAppear {
-            if section == .home && pages.items.isEmpty && pages.request == nil && pages.error == nil {
-                pages.reload()
+            guard change.session == session.account?.sessionIdentity else { return }
+            sections[.favorites].pages.reload()
+            for state in sections.values where state.thread?.thread.id == change.threadID {
+                state.thread?.isFavorite = change.isFavorite
             }
         }
         .sheet(isPresented: $showsLogin) { MacLoginView() }
@@ -219,190 +69,56 @@ struct MacReaderView: View {
         } message: { Text(session.errorMessage ?? "") }
     }
 
-    private var canReload: Bool {
-        switch section {
-        case .home: true
-        case .forum: forum != nil
-        case .search: !query.isEmpty
-        case .followedForums, .favorites: session.account != nil
-        }
+    private var readerActions: MacReaderActions {
+        let state = state
+        return MacReaderActions(
+            show: show,
+            find: find,
+            reload: state.canReload && (!section.requiresAccount || session.account != nil) ? reload : nil,
+            back: state.activeThread == nil ? nil : state.backToList,
+            forward: state.canGoForward ? state.forwardToThread : nil,
+            searchSort: state.activeThread == nil && (section == .search || (state.isInForum && !state.query.isEmpty)) ? Binding(
+                get: { state.searchSort },
+                set: { value in
+                    guard state.searchSort != value else { return }
+                    state.searchSort = value
+                    if !state.query.isEmpty {
+                        state.discardThread()
+                        state.reloadThreads()
+                    }
+                }
+            ) : nil,
+            forumSort: state.showsForumTopics ? Binding(
+                get: { state.forumSort },
+                set: { value in
+                    guard let forum = state.forum, state.forumSort != value else { return }
+                    session.forumSort.select(value, for: forum)
+                    state.forumSort = value
+                    state.discardThread()
+                    state.reloadThreads()
+                }
+            ) : nil,
+            onlyFeatured: state.showsForumTopics ? Binding(
+                get: { state.onlyFeatured },
+                set: { value in
+                    guard state.onlyFeatured != value else { return }
+                    state.onlyFeatured = value
+                    state.discardThread()
+                    state.reloadThreads()
+                }
+            ) : nil
+        )
     }
 
-    private var isInForum: Bool { section == .forum && forum != nil }
-    private var acceptsThreadSearch: Bool { section == .search || isInForum }
-    private var showsForumTopics: Bool { path.isEmpty && isInForum && query.isEmpty }
-    private var forumCategory: ForumThreadCategory { onlyFeatured ? .featured : forumSort }
-
-    private var navigationTitle: String {
-        if section == .forum, let forum {
-            return query.isEmpty ? forum.displayName : "\(forum.displayName) · 搜索"
-        }
-        return section.rawValue
-    }
-
-    private var threadList: some View {
-        let prefetchID = pages.items.dropLast(2).last?.id
-        return Group {
-            if (section == .forum || section == .search) && !canReload {
-                history
-            } else if pages.items.isEmpty && pages.nextPage == nil {
-                if pages.request != nil || pages.error != nil {
-                    ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: nil,
-                                     loadNext: {}, retry: { pages.retry() })
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    let title = !query.isEmpty ? "没有搜索结果" : section == .favorites ? "暂无收藏" : "暂无帖子"
-                    ContentUnavailableView(title, systemImage: section.icon)
-                }
-            } else {
-                let rowInsets = EdgeInsets(top: 4, leading: 24, bottom: 4, trailing: 24)
-                List {
-                    ForEach(pages.items) { destination in
-                        NavigationLink(value: destination) {
-                            MacThreadRow(thread: destination.thread, forumCategory: isInForum && query.isEmpty ? forumCategory : nil)
-                        }
-                        .listRowInsets(rowInsets)
-                        .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                        .alignmentGuide(.listRowSeparatorTrailing) { $0[.trailing] }
-                        .accessibilityIdentifier("thread-\(destination.id)")
-                        .onAppear {
-                            if destination.id == prefetchID { pages.loadNext() }
-                        }
-                    }
-                    if pages.request != nil || pages.error != nil || pages.nextPage != nil {
-                        ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
-                                         loadNext: { pages.loadNext() }, retry: { pages.retry() })
-                            .listRowInsets(rowInsets)
-                            .listRowSeparator(.hidden)
-                    }
-                }
-                .listStyle(.plain)
-                .frame(maxWidth: 872)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if let historyError {
-                Text(historyError).font(.callout).foregroundStyle(.secondary).padding(8)
-            }
-        }
-    }
-
-    private var followedForumList: some View {
-        Group {
-            if followed.items.isEmpty && followed.request == nil && followed.error == nil {
-                ContentUnavailableView("暂无关注的吧", systemImage: ReaderSection.followedForums.icon)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
-                        ForEach(followed.items) { forum in
-                            Button { openForum(forum) } label: {
-                                HStack(spacing: 12) {
-                                    ZStack {
-                                        Color.accentColor.opacity(0.12)
-                                        if let url = forum.avatarURL {
-                                            MacRemoteImage(url: url, maximumPixelSize: 96, contentMode: .fill,
-                                                           placeholder: "square.grid.2x2")
-                                        } else {
-                                            Text(forum.displayName.prefix(1))
-                                                .font(.headline)
-                                                .foregroundStyle(.tint)
-                                        }
-                                    }
-                                    .frame(width: 38, height: 38)
-                                    .clipShape(.rect(cornerRadius: 9))
-                                    .accessibilityHidden(true)
-                                    Text(forum.displayName)
-                                        .font(.callout.weight(.medium))
-                                        .lineLimit(1)
-                                    Spacer(minLength: 0)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .accessibilityHidden(true)
-                                }
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 5)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.large)
-                            .accessibilityIdentifier("followed-forum-\(forum.id)")
-                        }
-                    }
-                    ReaderPageFooter(loading: followed.request != nil, error: followed.error, nextPage: nil,
-                                     loadNext: {}, retry: { followed.retry() })
-                }
-                .contentMargins(24, for: .scrollContent)
-                .frame(maxWidth: 872)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
-    }
-
-    private var history: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Label(section == .forum ? "最近访问" : "历史搜索词",
-                          systemImage: section == .forum ? "clock" : "magnifyingglass")
-                        .font(.title3.weight(.semibold))
-                    Spacer()
-                    if section == .search && !searchHistory.items.isEmpty {
-                        Button("清空历史") {
-                            historyError = searchHistory.clear() ? nil : "无法清空搜索历史。"
-                        }
-                    }
-                }
-                if section == .forum {
-                    if recentForums.items.isEmpty {
-                        Text(recentForums.persistenceAvailability.canPersist ? "暂无访问记录" : "访问记录不可用")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 10)], alignment: .leading, spacing: 10) {
-                            ForEach(recentForums.items) { forum in
-                                Button { openForum(forum.forum) } label: {
-                                    HStack(spacing: 8) {
-                                        Text(forum.displayName.prefix(1))
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tint)
-                                            .frame(width: 24, height: 24)
-                                            .background(Color.accentColor.opacity(0.12), in: Circle())
-                                            .accessibilityHidden(true)
-                                        Text(forum.displayName).lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .controlSize(.large)
-                            }
-                        }
-                    }
-                } else {
-                    if searchHistory.items.isEmpty {
-                        Text(searchHistory.persistenceAvailability.canPersist ? "暂无搜索记录" : "搜索历史不可用")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(searchHistory.items, id: \.self) { keyword in
-                            Button { submit(keyword) } label: {
-                                Label(keyword, systemImage: "clock")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("删除此记录", systemImage: "trash", role: .destructive) {
-                                    historyError = searchHistory.remove(keyword) ? nil : "无法删除搜索记录。"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(24)
-            .frame(maxWidth: 680)
-            .frame(maxWidth: .infinity, alignment: .center)
+    private func reload() {
+        if let reading = state.activeThread {
+            reading.selectedReply = nil
+            reading.scrollPosition = .top
+            reading.pages.reload()
+        } else if section == .followedForums {
+            state.followed.reload()
+        } else {
+            state.pages.reload()
         }
     }
 
@@ -446,24 +162,414 @@ struct MacReaderView: View {
 
     private func show(_ destination: ReaderSection) {
         guard !destination.requiresAccount || session.account != nil else { return }
-        guard section != destination || (destination == .forum && isInForum) else { return }
         section = destination
-        input = ""
+    }
+
+    private func find() {
+        let target = section == .forum ? state : sections[.search]
+        target.backToList()
+        target.searchFocusRequested = true
+        show(target.section)
+    }
+
+    private func openFollowedForum(_ forum: Forum) {
+        sections[.forum].openForum(forum, sort: session.forumSort.selection(for: forum))
+        show(.forum)
+    }
+}
+
+private struct MacReaderWorkspace {
+    let home = MacReaderSectionState(section: .home)
+    let forum = MacReaderSectionState(section: .forum)
+    let search = MacReaderSectionState(section: .search)
+    let followed = MacReaderSectionState(section: .followedForums)
+    let favorites = MacReaderSectionState(section: .favorites)
+
+    subscript(section: ReaderSection) -> MacReaderSectionState {
+        switch section {
+        case .home: home
+        case .forum: forum
+        case .search: search
+        case .followedForums: followed
+        case .favorites: favorites
+        }
+    }
+
+    var values: [MacReaderSectionState] { [home, forum, search, followed, favorites] }
+}
+
+@Observable
+private final class MacReaderSectionState {
+    let id = UUID()
+    let section: ReaderSection
+    var input = ""
+    var query = ""
+    var forum: Forum?
+    var forumSort = ForumThreadCategory.replyTime
+    var onlyFeatured = false
+    var searchSort = ReaderSearchSort.latest
+    var searchFocusRequested = false
+    private(set) var thread: MacThreadReading?
+    private var showsThread = false
+    var pages = ReaderPages<MacThreadDestination>()
+    var followed = ReaderPages<Forum>()
+    var listPosition: String?
+    var followedPosition: Forum.ID?
+    var historyError: String?
+
+    init(section: ReaderSection) {
+        self.section = section
+        if section == .home || section == .favorites { pages.reload() }
+        if section == .followedForums { followed.reload() }
+    }
+
+    var canReload: Bool {
+        switch section {
+        case .forum: forum != nil
+        case .search: !query.isEmpty
+        case .home, .followedForums, .favorites: true
+        }
+    }
+
+    var isInForum: Bool { section == .forum && forum != nil }
+    var showsForumTopics: Bool { activeThread == nil && isInForum && query.isEmpty }
+
+    var activeThread: MacThreadReading? { showsThread ? thread : nil }
+    var canGoForward: Bool { !showsThread && thread != nil }
+
+    func openThread(_ destination: MacThreadDestination) {
+        if thread?.destinationID != destination.id {
+            thread = MacThreadReading(destinationID: destination.id, thread: destination.thread,
+                                      initialPostID: destination.matchedPostID ?? destination.markedPostID)
+        }
+        showsThread = true
+    }
+
+    func backToList() { showsThread = false }
+
+    func forwardToThread() { showsThread = thread != nil }
+
+    func discardThread() {
+        showsThread = false
+        thread = nil
+    }
+
+    func reloadThreads() {
+        listPosition = nil
+        pages.reload(clear: true)
+    }
+
+    func openForum(_ forum: Forum, sort: ForumThreadCategory) {
+        self.forum = forum
+        forumSort = sort
+        onlyFeatured = false
         query = ""
-        forum = nil
-        searchPresented = false
-        searchFocusRequest = nil
-        path = []
-        forwardDestination = nil
+        input = ""
+        discardThread()
         historyError = nil
-        pages = ReaderPages()
-        followed = ReaderPages()
-        if destination == .home || destination == .favorites { pages.reload() }
-        if destination == .followedForums { followed.reload() }
+        reloadThreads()
+    }
+}
+
+private struct MacReaderSectionView: View {
+    @EnvironmentObject private var session: MacSession
+    @Bindable var state: MacReaderSectionState
+    @ObservedObject var recentForums: RecentForumStore
+    @ObservedObject var searchHistory: SearchHistoryStore
+    let openFollowedForum: (Forum) -> Void
+
+    @State private var searchPresented = false
+
+    private var section: ReaderSection { state.section }
+
+    var body: some View {
+        Group {
+            if let reading = state.activeThread {
+                MacThreadView(reading: reading)
+                    .id(reading.destinationID)
+                    .toolbar {
+                        ToolbarItem(placement: .navigation) {
+                            Button("返回", systemImage: "chevron.backward", action: state.backToList)
+                                .labelStyle(.iconOnly)
+                                .help("返回帖子列表")
+                                .accessibilityIdentifier("back-to-thread-list")
+                        }
+                    }
+            } else {
+                sectionContent
+            }
+        }
+        .task(id: state.pages.request) { [request = state.pages.request] in
+            if let request { await loadThreads(request) }
+        }
+        .task(id: state.followed.request) { [request = state.followed.request] in
+            guard let request, let account = session.account else { return }
+            do {
+                let forums = try await session.api.followedForums(account: account)
+                try Task.checkCancellation()
+                guard state.followed.request == request, account.sessionIdentity == session.account?.sessionIdentity else { return }
+                let reconciled = session.relationships.reconciledFollowedForums(accountID: account.id, loaded: forums)
+                session.relationships.seedFollowedForums(accountID: account.id, forums: reconciled)
+                if let anchor = state.followedPosition, !reconciled.contains(where: { $0.id == anchor }) {
+                    state.followedPosition = nil
+                }
+                state.followed.accept(reconciled, nextPage: nil, for: request)
+            } catch {
+                if !Task.isCancelled { state.followed.fail(error, for: request) }
+            }
+        }
+    }
+
+    private var sectionContent: some View {
+        Group {
+            switch section {
+            case .home, .favorites:
+                threadList
+            case .followedForums:
+                followedForumList
+            case .forum, .search:
+                threadList
+                    .searchable(text: $state.input, isPresented: $searchPresented, placement: .toolbar,
+                                prompt: Text(section == .forum ? (state.forum == nil ? "贴吧名称" : "搜索吧内帖子") : "搜索帖子"))
+                    .task(id: state.searchFocusRequested) {
+                        guard state.searchFocusRequested else { return }
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        searchPresented = true
+                        state.searchFocusRequested = false
+                    }
+                    .onSubmit(of: .search) { submit(state.input) }
+                    .onChange(of: state.input) { _, value in
+                        if state.isInForum && value.isEmpty && !state.query.isEmpty {
+                            state.query = ""
+                            state.discardThread()
+                            state.reloadThreads()
+                        }
+                    }
+                    .onExitCommand {
+                        if state.input.isEmpty { searchPresented = false }
+                        else { state.input = "" }
+                    }
+                    .searchSuggestions {
+                        if acceptsThreadSearch && (section == .search || !state.input.isEmpty)
+                            && (state.query.isEmpty || state.input != state.query) {
+                            ForEach(searchHistory.items.filter {
+                                state.input.isEmpty || $0.localizedCaseInsensitiveContains(state.input)
+                            }.prefix(8), id: \.self) { keyword in
+                                Button { submit(keyword) } label: {
+                                    Label(keyword, systemImage: "clock")
+                                }
+                            }
+                        }
+                    }
+            }
+        }
+        .navigationTitle(navigationTitle)
+        .toolbar {
+            if state.isInForum {
+                ToolbarItem(placement: .navigation) {
+                    Button("返回进吧", systemImage: "chevron.backward") { returnToForumEntry() }
+                        .help("返回进吧")
+                        .accessibilityIdentifier("back-to-forum-entry")
+                }
+                if let forum = state.forum, let account = session.account {
+                    ToolbarItem(placement: .primaryAction) {
+                        MacForumFollowButton(forum: forum, account: account)
+                            .id(account.sessionIdentity)
+                            .id(forum.name)
+                    }
+                }
+            }
+        }
+    }
+
+    private var acceptsThreadSearch: Bool { section == .search || state.isInForum }
+    private var forumCategory: ForumThreadCategory { state.onlyFeatured ? .featured : state.forumSort }
+
+    private var navigationTitle: String {
+        if section == .forum, let forum = state.forum {
+            return state.query.isEmpty ? forum.displayName : "\(forum.displayName) · 搜索"
+        }
+        return section.rawValue
+    }
+
+    private var threadList: some View {
+        let prefetchID = state.pages.items.dropLast(2).last?.id
+        return Group {
+            if (section == .forum || section == .search) && !state.canReload {
+                history
+            } else if state.pages.items.isEmpty && state.pages.nextPage == nil {
+                if state.pages.request != nil || state.pages.error != nil {
+                    ReaderPageFooter(loading: state.pages.request != nil, error: state.pages.error, nextPage: nil,
+                                     loadNext: {}, retry: { state.pages.retry() })
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    let title = !state.query.isEmpty ? "没有搜索结果" : section == .favorites ? "暂无收藏" : "暂无帖子"
+                    ContentUnavailableView(title, systemImage: section.icon)
+                }
+            } else {
+                ReaderScrollView(position: $state.listPosition) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(state.pages.items) { destination in
+                            VStack(spacing: 0) {
+                                Button {
+                                    searchPresented = false
+                                    state.openThread(destination)
+                                } label: {
+                                    MacThreadRow(thread: destination.thread,
+                                                 forumCategory: state.isInForum && state.query.isEmpty ? forumCategory : nil)
+                                        .padding(.vertical, 4)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("thread-\(destination.id)")
+                                Divider()
+                            }
+                            .id(destination.id)
+                            .onAppear {
+                                if destination.id == prefetchID { state.pages.loadNext() }
+                            }
+                        }
+                    }
+                    .scrollTargetLayout()
+                    ReaderPageFooter(loading: state.pages.request != nil, error: state.pages.error,
+                                     nextPage: state.pages.nextPage, loadNext: { state.pages.loadNext() },
+                                     retry: { state.pages.retry() })
+                }
+                .contentMargins(.horizontal, 24, for: .scrollContent)
+                .accessibilityIdentifier("reader-thread-list")
+                .frame(maxWidth: 872)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let historyError = state.historyError {
+                Text(historyError).font(.callout).foregroundStyle(.secondary).padding(8)
+            }
+        }
+    }
+
+    private var followedForumList: some View {
+        Group {
+            if state.followed.items.isEmpty && state.followed.request == nil && state.followed.error == nil {
+                ContentUnavailableView("暂无关注的吧", systemImage: ReaderSection.followedForums.icon)
+            } else {
+                ReaderScrollView(position: $state.followedPosition) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+                        ForEach(state.followed.items) { forum in
+                            Button { openFollowedForum(forum) } label: {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Color.accentColor.opacity(0.12)
+                                        if let url = forum.avatarURL {
+                                            MacRemoteImage(url: url, maximumPixelSize: 96, contentMode: .fill,
+                                                           placeholder: "square.grid.2x2")
+                                        } else {
+                                            Text(forum.displayName.prefix(1))
+                                                .font(.headline)
+                                                .foregroundStyle(.tint)
+                                        }
+                                    }
+                                    .frame(width: 38, height: 38)
+                                    .clipShape(.rect(cornerRadius: 9))
+                                    .accessibilityHidden(true)
+                                    Text(forum.displayName)
+                                        .font(.callout.weight(.medium))
+                                        .lineLimit(1)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityHidden(true)
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 5)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .accessibilityIdentifier("followed-forum-\(forum.id)")
+                        }
+                    }
+                    .scrollTargetLayout()
+                    ReaderPageFooter(loading: state.followed.request != nil, error: state.followed.error, nextPage: nil,
+                                     loadNext: {}, retry: { state.followed.retry() })
+                }
+                .contentMargins(24, for: .scrollContent)
+                .frame(maxWidth: 872)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.background)
+    }
+
+    private var history: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Label(section == .forum ? "最近访问" : "历史搜索词",
+                          systemImage: section == .forum ? "clock" : "magnifyingglass")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                    if section == .search && !searchHistory.items.isEmpty {
+                        Button("清空历史") {
+                            state.historyError = searchHistory.clear() ? nil : "无法清空搜索历史。"
+                        }
+                    }
+                }
+                if section == .forum {
+                    if recentForums.items.isEmpty {
+                        Text(recentForums.persistenceAvailability.canPersist ? "暂无访问记录" : "访问记录不可用")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 10)], alignment: .leading, spacing: 10) {
+                            ForEach(recentForums.items) { forum in
+                                Button { openForum(forum.forum) } label: {
+                                    HStack(spacing: 8) {
+                                        Text(forum.displayName.prefix(1))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.tint)
+                                            .frame(width: 24, height: 24)
+                                            .background(Color.accentColor.opacity(0.12), in: Circle())
+                                            .accessibilityHidden(true)
+                                        Text(forum.displayName).lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .controlSize(.large)
+                            }
+                        }
+                    }
+                } else {
+                    if searchHistory.items.isEmpty {
+                        Text(searchHistory.persistenceAvailability.canPersist ? "暂无搜索记录" : "搜索历史不可用")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(searchHistory.items, id: \.self) { keyword in
+                            Button { submit(keyword) } label: {
+                                Label(keyword, systemImage: "clock")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("删除此记录", systemImage: "trash", role: .destructive) {
+                                    state.historyError = searchHistory.remove(keyword) ? nil : "无法删除搜索记录。"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
     }
 
     private func submit(_ text: String) {
-        if section == .forum && forum == nil {
+        if section == .forum && state.forum == nil {
             let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return }
             openForum(Forum(id: 0, name: name, displayName: name.hasSuffix("吧") ? name : "\(name)吧",
@@ -472,50 +578,47 @@ struct MacReaderView: View {
         }
         let value = SearchHistoryPolicy.normalizedKeyword(text)
         guard !value.isEmpty else { return }
-        input = value
-        query = value
+        state.input = value
+        state.query = value
         searchPresented = false
-        forwardDestination = nil
-        historyError = nil
+        state.discardThread()
+        state.historyError = nil
         if section == .search && !searchHistory.record(value) {
-            historyError = "无法保存搜索历史。"
+            state.historyError = "无法保存搜索历史。"
         }
-        pages.reload(clear: true)
+        state.reloadThreads()
     }
 
     private func openForum(_ forum: Forum) {
-        if section != .forum { show(.forum) }
-        self.forum = forum
-        forumSort = session.forumSort.selection(for: forum)
-        onlyFeatured = false
-        query = ""
-        input = ""
         searchPresented = false
-        forwardDestination = nil
-        historyError = nil
-        pages.reload(clear: true)
+        state.openForum(forum, sort: session.forumSort.selection(for: forum))
     }
 
-    private func reload() {
-        if !path.isEmpty { threadReload = UUID() }
-        else if section == .followedForums { followed.reload() }
-        else { pages.reload() }
+    private func returnToForumEntry() {
+        searchPresented = false
+        state.forum = nil
+        state.input = ""
+        state.query = ""
+        state.historyError = nil
+        state.discardThread()
+        state.pages = ReaderPages()
+        state.listPosition = nil
     }
 
     @MainActor
     private func loadThreads(_ request: ReaderPages<MacThreadDestination>.Request) async {
-        guard pages.request == request else { return }
+        guard state.pages.request == request else { return }
         let page = request.page
         let section = section
         let account = session.account
-        let forum = forum
-        let query = query
+        let forum = state.forum
+        let query = state.query
         do {
             let incoming: [MacThreadDestination]
             let next: Int?
             switch (section, query.isEmpty) {
             case (.search, false), (.forum, false):
-                let result = try await session.api.searchThreads(keyword: query, page: page, sortType: searchSort.rawValue,
+                let result = try await session.api.searchThreads(keyword: query, page: page, sortType: state.searchSort.rawValue,
                                                                  forumName: forum?.name)
                 incoming = result.results.map { MacThreadDestination(thread: $0.threadSummary, matchedPostID: $0.postID) }
                 next = result.hasMore ? max(page, result.currentPage) + 1 : nil
@@ -547,18 +650,21 @@ struct MacReaderView: View {
                 return
             }
             try Task.checkCancellation()
-            guard pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
-            pages.accept(incoming, nextPage: next, for: request)
+            guard state.pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
+            if request.replacesItems, let anchor = state.listPosition, !incoming.contains(where: { $0.id == anchor }) {
+                state.listPosition = nil
+            }
+            state.pages.accept(incoming, nextPage: next, for: request)
             if section == .forum, query.isEmpty, request.replacesItems, let forum {
                 let resolved = incoming.first?.thread.forumRoute ?? forum
-                self.forum = resolved
+                state.forum = resolved
                 if !recentForums.save(resolved) {
-                    historyError = "无法保存访问记录。"
+                    state.historyError = "无法保存访问记录。"
                 }
             }
         } catch {
             guard !Task.isCancelled else { return }
-            pages.fail(error, for: request)
+            state.pages.fail(error, for: request)
         }
     }
 }

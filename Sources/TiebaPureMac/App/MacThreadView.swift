@@ -1,112 +1,66 @@
 import SwiftUI
 
-struct MacThreadView: View {
-    @EnvironmentObject private var session: MacSession
-    let thread: ThreadSummary
-    let reloadID: UUID
-
-    @State private var header: ThreadSummary?
-    @State private var forumID: Int64?
-    @State private var pages = ReaderPages<Post>()
-    @State private var selectedPost: Post?
-    @State private var onlyAuthor = false
-    @State private var targetPostID: UInt64?
-    @State private var isFavorite: Bool?
-    @State private var isUpdatingFavorite = false
-
-    init(thread: ThreadSummary, initialPostID: UInt64?, reloadID: UUID) {
-        self.thread = thread
-        self.reloadID = reloadID
-        _targetPostID = State(initialValue: initialPostID)
+@Observable
+final class MacThreadReading {
+    enum ScrollTarget: Hashable {
+        case top
+        case post(UInt64)
     }
 
+    let destinationID: String
+    let thread: ThreadSummary
+    var header: ThreadSummary?
+    var forumID: Int64?
+    var pages = ReaderPages<Post>()
+    var selectedReply: MacSubpostsReading?
+    var onlyAuthor = false
+    var targetPostID: UInt64?
+    var isFavorite: Bool?
+    var isUpdatingFavorite = false
+    var scrollPosition: ScrollTarget?
+
+    init(destinationID: String, thread: ThreadSummary, initialPostID: UInt64?) {
+        self.destinationID = destinationID
+        self.thread = thread
+        targetPostID = initialPostID
+    }
+}
+
+@Observable
+final class MacSubpostsReading {
+    let post: Post
+    var pages = ReaderPages<Subpost>()
+    var scrollPosition: Subpost.ID?
+
+    init(post: Post) {
+        self.post = post
+    }
+}
+
+struct MacThreadView: View {
+    @EnvironmentObject private var session: MacSession
+    @Bindable var reading: MacThreadReading
+    @State private var imagePreview: MacImagePreviewSelection?
+
+    private var thread: ThreadSummary { reading.thread }
+
     var body: some View {
-        ScrollViewReader { scroll in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    Text(header?.title ?? thread.title)
-                        .font(.title2.bold())
-                        .textSelection(.enabled)
-                        .padding(.bottom, 18)
-                        .id("thread-top")
-                    let authorID = pages.items.first?.author.id
-                    ForEach(pages.items) { post in
-                        VStack(alignment: .leading, spacing: 11) {
-                            HStack(spacing: 8) {
-                                Text(post.author.displayNameResolved)
-                                    .font(.headline)
-                                    .lineLimit(1)
-                                if post.floor == 1 || (post.author.id > 0 && post.author.id == authorID) {
-                                    Text("楼主")
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(.tint)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
-                                        .fixedSize()
-                                }
-                                Spacer()
-                                if let createdAt = post.createdAt {
-                                    Text(createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
-                                        .help(createdAt.formatted(date: .abbreviated, time: .shortened))
-                                        .lineLimit(1)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text("\(post.floor) 楼")
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize()
-                            }
-                            MacContentBlocks(blocks: post.blocks)
-                            if post.subpostCount > 0 {
-                                Button("\(post.subpostCount) 条回复") { selectedPost = post }
-                                .buttonStyle(.link)
-                                .accessibilityIdentifier("replies-\(post.id)")
-                            }
-                        }
-                        .padding(.vertical, 15)
-                        .id(post.id)
-                        Divider()
-                    }
-                    ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
-                                     loadNext: { pages.loadNext() }, retry: { pages.retry() })
-                }
-                .padding(24)
-                .frame(maxWidth: 860)
-                .frame(maxWidth: .infinity)
-            }
-            .onChange(of: pages.items.first?.id) { old, new in
-                if old == nil, new != nil, let targetPostID,
-                   pages.items.contains(where: { $0.id == targetPostID }) {
-                    scroll.scrollTo(targetPostID, anchor: .top)
-                }
-            }
-            .onChange(of: onlyAuthor) { _, _ in
-                targetPostID = nil
-                selectedPost = nil
-                scroll.scrollTo("thread-top", anchor: .top)
-                pages.reload(clear: true)
-            }
-            .onChange(of: reloadID) { _, _ in
-                selectedPost = nil
-                scroll.scrollTo("thread-top", anchor: .top)
-                pages.reload()
-            }
-        }
-        .navigationTitle(header?.forumDisplayNameResolved ?? thread.forumDisplayNameResolved ?? "帖子")
+        floors
+        .navigationTitle(reading.header?.forumDisplayNameResolved ?? thread.forumDisplayNameResolved ?? "帖子")
         .toolbar {
-            Toggle("只看楼主", systemImage: "person.crop.circle", isOn: $onlyAuthor)
+            Toggle("只看楼主", systemImage: "person.crop.circle", isOn: $reading.onlyAuthor)
                 .toggleStyle(.button)
                 .help("只看楼主")
                 .accessibilityIdentifier("only-thread-author")
-            if let account = session.account, let isFavorite, let main = pages.items.first {
+            if let account = session.account, let isFavorite = reading.isFavorite, let main = reading.pages.items.first {
                 Button(isFavorite ? "取消收藏" : "收藏", systemImage: isFavorite ? "bookmark.fill" : "bookmark") {
-                    isUpdatingFavorite = true
+                    reading.isUpdatingFavorite = true
                     Task {
-                        defer { isUpdatingFavorite = false }
+                        defer { reading.isUpdatingFavorite = false }
                         do {
                             try await session.setThreadFavorite(
-                                account: account, threadID: thread.id, forumID: forumID ?? thread.forumID,
-                                postID: targetPostID ?? main.id, isFavorite: !isFavorite
+                                account: account, threadID: thread.id, forumID: reading.forumID ?? thread.forumID,
+                                postID: reading.targetPostID ?? main.id, isFavorite: !isFavorite
                             )
                         } catch is CancellationError {
                         } catch {
@@ -117,7 +71,7 @@ struct MacThreadView: View {
                     }
                 }
                 .help(isFavorite ? "取消收藏" : "收藏")
-                .disabled(isUpdatingFavorite || session.isLoggingOut)
+                .disabled(reading.isUpdatingFavorite || session.isLoggingOut)
                 .accessibilityIdentifier(isFavorite ? "thread-unfavorite" : "thread-favorite")
             }
             if let url = URL(string: "https://tieba.baidu.com/p/\(thread.id)") {
@@ -125,35 +79,111 @@ struct MacThreadView: View {
             }
         }
         .inspector(isPresented: Binding(
-            get: { selectedPost != nil },
-            set: { if !$0 { selectedPost = nil } }
+            get: { reading.selectedReply != nil },
+            set: { if !$0 { reading.selectedReply = nil } }
         )) {
-            if let selectedPost {
-                MacSubpostsView(threadID: thread.id, forumID: forumID ?? thread.forumID, post: selectedPost) {
-                    self.selectedPost = nil
-                }
-                .id(selectedPost.id)
-                .inspectorColumnWidth(min: 260, ideal: 330, max: 440)
+            if let reply = reading.selectedReply {
+                MacSubpostsView(threadID: thread.id, forumID: reading.forumID ?? thread.forumID,
+                                reading: reply, close: { reading.selectedReply = nil },
+                                preview: { imagePreview = $0 })
+                    .id(reply.post.id)
+                    .inspectorColumnWidth(min: 260, ideal: 330, max: 440)
             }
         }
+        .sheet(item: $imagePreview) { MacImagePreview(selection: $0) }
         .onAppear {
-            if pages.items.isEmpty && pages.request == nil && pages.error == nil { pages.reload() }
+            if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil {
+                reading.pages.reload()
+            }
         }
-        .task(id: pages.request) { [request = pages.request] in
+        .task(id: reading.pages.request) { [request = reading.pages.request] in
             if let request { await loadPage(request) }
         }
-        .onReceive(session.favoriteDidChange) { change in
-            if change.session == session.account?.sessionIdentity && change.threadID == thread.id {
-                isFavorite = change.isFavorite
+    }
+
+    private var floors: some View {
+        ReaderScrollView(position: $reading.scrollPosition) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                Text(reading.header?.title ?? thread.title)
+                    .font(.title2.bold())
+                    .textSelection(.enabled)
+                    .padding(.bottom, 18)
+                    .id(MacThreadReading.ScrollTarget.top)
+                let authorID = reading.pages.items.first?.author.id
+                ForEach(reading.pages.items) { post in
+                    floor(post, authorID: authorID)
+                        .id(MacThreadReading.ScrollTarget.post(post.id))
+                }
+            }
+            .scrollTargetLayout()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            ReaderPageFooter(loading: reading.pages.request != nil, error: reading.pages.error,
+                             nextPage: reading.pages.nextPage, loadNext: { reading.pages.loadNext() },
+                             retry: { reading.pages.retry() })
+        }
+        .contentMargins(24, for: .scrollContent)
+        .accessibilityIdentifier("thread-floors")
+        .frame(maxWidth: 860)
+        .frame(maxWidth: .infinity)
+        .onChange(of: reading.pages.items.first?.id) { old, new in
+            if old == nil, new != nil, let target = reading.targetPostID,
+               reading.pages.items.contains(where: { $0.id == target }) {
+                reading.scrollPosition = .post(target)
             }
         }
+        .onChange(of: reading.onlyAuthor) { _, _ in
+            reading.targetPostID = nil
+            reading.selectedReply = nil
+            reading.scrollPosition = .top
+            reading.pages.reload(clear: true)
+        }
+    }
+
+    private func floor(_ post: Post, authorID: Int64?) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 8) {
+                Text(post.author.displayNameResolved)
+                    .font(.headline)
+                    .lineLimit(1)
+                if post.floor == 1 || (post.author.id > 0 && post.author.id == authorID) {
+                    Text("楼主")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.tint)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        .fixedSize()
+                }
+                Spacer()
+                if let createdAt = post.createdAt {
+                    Text(createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                        .help(createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(post.floor) 楼")
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .accessibilityIdentifier("post-floor-\(post.id)")
+            }
+            MacContentBlocks(blocks: post.blocks) { imagePreview = $0 }
+            if post.subpostCount > 0 {
+                Button("\(post.subpostCount) 条回复") {
+                    reading.selectedReply = MacSubpostsReading(post: post)
+                }
+                .buttonStyle(.link)
+                .accessibilityIdentifier("replies-\(post.id)")
+            }
+            Divider().padding(.top, 4)
+        }
+        .padding(.top, 15)
     }
 
     @MainActor
     private func loadPage(_ request: ReaderPages<Post>.Request) async {
-        guard pages.request == request else { return }
+        guard reading.pages.request == request else { return }
         let requestedPage = request.page
-        let onlyAuthor = onlyAuthor
+        let onlyAuthor = reading.onlyAuthor
         let account = session.account
         do {
             if request.replacesItems, let account {
@@ -162,7 +192,7 @@ struct MacThreadView: View {
             }
             let incoming = try await session.api.threadPage(
                 account: account, threadID: thread.id, page: requestedPage,
-                forumID: forumID ?? thread.forumID, postID: request.replacesItems && !onlyAuthor ? targetPostID : nil,
+                forumID: reading.forumID ?? thread.forumID, postID: request.replacesItems && !onlyAuthor ? reading.targetPostID : nil,
                 seeLz: onlyAuthor
             )
             try Task.checkCancellation()
@@ -179,13 +209,13 @@ struct MacThreadView: View {
                 guard let mainPost else { throw TiebaAPIError.missingMainPost }
                 posts.insert(mainPost, at: 0)
             }
-            guard pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
-            header = incoming.thread
-            forumID = incoming.forum.id
-            if request.replacesItems { isFavorite = incoming.isCollected }
-            pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)
+            guard reading.pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
+            reading.header = incoming.thread
+            reading.forumID = incoming.forum.id
+            if request.replacesItems { reading.isFavorite = incoming.isCollected }
+            reading.pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)
         } catch {
-            if !Task.isCancelled { pages.fail(error, for: request) }
+            if !Task.isCancelled { reading.pages.fail(error, for: request) }
         }
     }
 }
@@ -194,10 +224,11 @@ private struct MacSubpostsView: View {
     @EnvironmentObject private var session: MacSession
     let threadID: Int64
     let forumID: Int64?
-    let post: Post
+    @Bindable var reading: MacSubpostsReading
     let close: () -> Void
+    let preview: (MacImagePreviewSelection) -> Void
 
-    @State private var pages = ReaderPages<Subpost>()
+    private var post: Post { reading.post }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -212,33 +243,39 @@ private struct MacSubpostsView: View {
             .padding(14)
             Divider()
             if let forumID, forumID > 0 {
-                ScrollView {
+                ReaderScrollView(position: $reading.scrollPosition) {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(pages.items) { subpost in
-                            Text(subpost.author.displayNameResolved).font(.headline)
-                            MacContentBlocks(blocks: subpost.blocks)
-                            Divider()
+                        ForEach(reading.pages.items) { subpost in
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(subpost.author.displayNameResolved).font(.headline)
+                                MacContentBlocks(blocks: subpost.blocks, preview: preview)
+                                Divider()
+                            }
+                            .id(subpost.id)
                         }
-                        if pages.items.isEmpty && pages.request == nil && pages.error == nil {
+                    }
+                    .scrollTargetLayout()
+                    VStack {
+                        if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil {
                             Text("暂无回复").foregroundStyle(.secondary)
                         }
-                        ReaderPageFooter(loading: pages.request != nil, error: pages.error, nextPage: pages.nextPage,
-                                         loadNext: { pages.loadNext() }, retry: { pages.retry() })
+                        ReaderPageFooter(loading: reading.pages.request != nil, error: reading.pages.error, nextPage: reading.pages.nextPage,
+                                         loadNext: { reading.pages.loadNext() }, retry: { reading.pages.retry() })
                     }
-                    .padding(14)
                 }
-                .onAppear { if pages.items.isEmpty && pages.request == nil && pages.error == nil { pages.reload() } }
-                .task(id: pages.request) { [request = pages.request] in
-                    guard let request, pages.request == request else { return }
+                .contentMargins(14, for: .scrollContent)
+                .onAppear { if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil { reading.pages.reload() } }
+                .task(id: reading.pages.request) { [request = reading.pages.request] in
+                    guard let request, reading.pages.request == request else { return }
                     do {
                         let incoming = try await session.api.subposts(account: session.account, threadID: threadID,
                                                                       postID: post.id, forumID: forumID, page: request.page)
                         try Task.checkCancellation()
-                        let count = Set(pages.items.map(\.id)).union(incoming.map(\.id)).count
-                        pages.accept(incoming, nextPage: !incoming.isEmpty && count < post.subpostCount ? request.page + 1 : nil,
+                        let count = Set(reading.pages.items.map(\.id)).union(incoming.map(\.id)).count
+                        reading.pages.accept(incoming, nextPage: !incoming.isEmpty && count < post.subpostCount ? request.page + 1 : nil,
                                      for: request)
                     } catch {
-                        if !Task.isCancelled { pages.fail(error, for: request) }
+                        if !Task.isCancelled { reading.pages.fail(error, for: request) }
                     }
                 }
             } else {
@@ -251,10 +288,11 @@ private struct MacSubpostsView: View {
 
 struct MacContentBlocks: View {
     let blocks: [ContentBlock]
+    let preview: (MacImagePreviewSelection) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { offset, block in
                 switch block {
                 case let .text(text):
                     Text(text).textSelection(.enabled)
@@ -268,7 +306,7 @@ struct MacContentBlocks: View {
                         MacRemoteImage(url: url).frame(width: 28, height: 28)
                     } else { Text(TiebaEmoticon.displayText(for: code)) }
                 case let .image(image):
-                    if let url = image.originalURL ?? image.thumbnailURL {
+                    if let url = image.thumbnailURL ?? image.originalURL {
                         let hasDimensions = image.width > 0 && image.height > 0
                         // Missing dimensions use a 4:3 preview so decoding cannot move the following content.
                         let ratio = hasDimensions ? CGFloat(image.width) / CGFloat(image.height) : 4.0 / 3
@@ -278,7 +316,18 @@ struct MacContentBlocks: View {
                             .aspectRatio(ratio, contentMode: .fit)
                             .frame(maxWidth: min(width, 812, 480 * ratio))
                             .overlay {
-                                MacRemoteImage(url: url)
+                                MacRemoteImage(url: url, preview: (image.originalURL ?? url, { thumbnail in
+                                    let images: [(offset: Int, source: MacPreviewImage)] = blocks.enumerated().compactMap { index, block in
+                                        guard case let .image(content) = block,
+                                              let source = MacPreviewImage(content) else { return nil }
+                                        return (index, source)
+                                    }
+                                    if let index = images.firstIndex(where: { $0.offset == offset }) {
+                                        preview(MacImagePreviewSelection(images: images.map(\.source),
+                                                                         index: index, thumbnail: thumbnail))
+                                    }
+                                }))
+                                .accessibilityIdentifier("post-image-\(offset)")
                             }
                             .clipShape(.rect(cornerRadius: 6))
                     }

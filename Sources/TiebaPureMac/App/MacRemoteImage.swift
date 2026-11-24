@@ -6,6 +6,7 @@ struct MacRemoteImage: View {
     var maximumPixelSize = 1600
     var contentMode: ContentMode = .fit
     var placeholder: String?
+    var preview: (shareURL: URL, open: (NSImage?) -> Void)?
 
     private static let thumbnails: NSCache<NSString, CGImage> = {
         let cache = NSCache<NSString, CGImage>()
@@ -19,23 +20,26 @@ struct MacRemoteImage: View {
 
     var body: some View {
         Group {
-            if let image {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: contentMode)
+            if let preview {
+                Button { preview.open(image) } label: {
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("查看图片")
+                .help("查看图片")
+                .contextMenu {
+                    Button("查看图片") { preview.open(image) }
+                    ShareLink(item: preview.shareURL) { Text("分享图片链接") }
+                }
+            } else {
+                content
                     .contextMenu {
-                        if placeholder == nil {
+                        if image != nil, placeholder == nil {
                             ShareLink(item: url) { Text("分享图片链接") }
                         }
                     }
-            } else if let placeholder {
-                Image(systemName: placeholder)
-                    .resizable().scaledToFit().padding(4)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(failed ? "图片加载失败" : "正在加载图片")
-            } else if failed {
-                Label("图片加载失败", systemImage: "photo.badge.exclamationmark")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                ProgressView().controlSize(.small)
             }
         }
         .animation(reduceMotion || placeholder != nil ? nil : .easeInOut(duration: 0.18), value: image != nil)
@@ -43,13 +47,34 @@ struct MacRemoteImage: View {
             image = nil
             failed = false
             do {
-                let thumbnail = try await Self.thumbnail(url: url, maximumPixelSize: maximumPixelSize)
-                try Task.checkCancellation()
-                image = NSImage(cgImage: thumbnail, size: .zero)
+                image = try await Self.load(url: url, maximumPixelSize: maximumPixelSize)
             } catch {
                 if !Task.isCancelled { failed = true }
             }
         }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let image {
+            Image(nsImage: image).resizable().aspectRatio(contentMode: contentMode)
+        } else if let placeholder {
+            Image(systemName: placeholder)
+                .resizable().scaledToFit().padding(4)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(failed ? "图片加载失败" : "正在加载图片")
+        } else if failed {
+            Label("图片加载失败", systemImage: "photo.badge.exclamationmark")
+                .font(.caption).foregroundStyle(.secondary)
+        } else {
+            ProgressView().controlSize(.small)
+        }
+    }
+
+    static func load(url: URL, maximumPixelSize: Int) async throws -> NSImage {
+        let thumbnail = try await thumbnail(url: url, maximumPixelSize: maximumPixelSize)
+        try Task.checkCancellation()
+        return NSImage(cgImage: thumbnail, size: .zero)
     }
 
     private static func thumbnail(url: URL, maximumPixelSize: Int) async throws -> CGImage {
