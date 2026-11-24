@@ -15,6 +15,7 @@ final class MessageAPITests: XCTestCase {
     }
 
     func testReplyMessagesPostsSignedFormToReplyMePath() async throws {
+        let account = makeAccount(bduss: "bduss + test")
         let api = makeAPI { request in
             let url = try XCTUnwrap(request.url)
             XCTAssertEqual(url.host, "c.tieba.baidu.com")
@@ -29,7 +30,7 @@ final class MessageAPITests: XCTestCase {
             XCTAssertEqual(request.value(forHTTPHeaderField: "Cookie"), "ka=open")
 
             var fields = try Self.formFields(request)
-            XCTAssertEqual(fields["BDUSS"], "bduss")
+            XCTAssertEqual(fields["BDUSS"], account.bduss)
             XCTAssertEqual(fields["pn"], "2")
             XCTAssertEqual(fields["_client_id"], "message-test-client")
             XCTAssertEqual(fields["_client_type"], "2")
@@ -46,7 +47,7 @@ final class MessageAPITests: XCTestCase {
             return Self.replyResponseJSON
         }
 
-        let page = try await api.messages(account: makeAccount(), kind: .reply, page: 2)
+        let page = try await api.messages(account: account, kind: .reply, page: 2)
 
         XCTAssertTrue(page.hasMore)
         XCTAssertEqual(page.currentPage, 2)
@@ -319,13 +320,13 @@ final class MessageAPITests: XCTestCase {
         XCTAssertEqual(Set(firstIDs).count, 2)
     }
 
-    private func makeAccount() -> Account {
+    private func makeAccount(bduss: String = "bduss") -> Account {
         Account(
             uid: "42",
             name: "raw",
             displayName: "本人",
             portrait: "portrait",
-            bduss: "bduss",
+            bduss: bduss,
             stoken: "stoken",
             baiduID: "baiduid",
             tbs: "tbs"
@@ -362,7 +363,8 @@ final class MessageAPITests: XCTestCase {
         }
         let text = try XCTUnwrap(String(data: body, encoding: .utf8))
         var components = URLComponents()
-        components.percentEncodedQuery = text
+        // Form bodies use '+' for spaces, while a literal plus is encoded as %2B.
+        components.percentEncodedQuery = text.replacingOccurrences(of: "+", with: "%20")
         return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
     }
 
