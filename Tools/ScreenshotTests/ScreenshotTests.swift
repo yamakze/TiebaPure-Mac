@@ -145,11 +145,16 @@ final class ScreenshotTests: XCTestCase {
     func testForumSearchAndAccountLibrary() {
         launchFixture("SCREENSHOT_ACCOUNT", "UITEST_SEED_ACCOUNT_COLLECTION",
                       "-io.github.yamakze.TiebaPureMac.appearance", "light")
+        let homeRow = app.descendants(matching: .any)["thread-1001-0"].firstMatch
+        XCTAssertTrue(homeRow.isPresent(within: 10))
 
         let followed = app.descendants(matching: .any)["section-followedForums"].firstMatch
         XCTAssertTrue(followed.isPresent(within: 10))
         followed.click()
         let forum = app.buttons["followed-forum-101"]
+        if !forum.isPresent(within: 3) {
+            followed.click()
+        }
         XCTAssertTrue(forum.isPresent(within: 10))
         capture("16-followed-forums")
         forum.click()

@@ -27,6 +27,10 @@ SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
     <td width="50%"><img src="docs/screenshots/screenshot-subposts.png" alt="楼中楼侧栏检视" /></td>
     <td width="50%"><img src="docs/screenshots/screenshot-forum.png" alt="吧内浏览与排序筛选" /></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/screenshot-search.png" alt="全站与吧内检索" /></td>
+    <td width="50%"><img src="docs/screenshots/screenshot-preview.png" alt="原生多图预览与缩放" /></td>
+  </tr>
 </table>
 
 </div>

@@ -2,25 +2,24 @@
 
 ## 0.1.0 — Unreleased
 
-- 建立原生 macOS 14+ SwiftPM 工程与 `.app` 打包链路。
-- 继承上游协议、映射、状态协调和核心回归测试。
-- 新建 Mac 侧栏与单内容区导航，支持搜索、进吧及 WebKit 登录。
-- 复用上游应用图标，增加浅色/深色全页面截图脚本。
-- 移除 iOS 工程、分享扩展、触摸转场、IPA 脚本与模拟器 CI。
-
-- 统一 TiebaPure-Mac 应用命名与缓存前缀，增加一键构建启动脚本。
-- 改用透明底 Mac 图标，应用产物移至 `artifacts/macos`。
-- 本地化系统菜单，将刷新移至「显示」，提供外观切换和发布记录入口。
-- 使用 Sparkle 检查和安装签名更新，增加 Universal 应用公证与发布草稿流程。
+- 建立原生 macOS 14+ SwiftPM 工程与 `.app` 打包链路，移除 iOS 遗留依赖与触摸转场。
+- 新建 Mac 桌面多栏目导航与单窗口阅读体验，支持楼层连续加载、只看楼主与楼中楼 Inspector 检视。
+- 引入阅读位置记忆与恢复机制，支持跨栏目切换保留滚动锚点与上下文，支持快捷键历史导航。
+- 原生多图预览：正文与楼中楼图片支持点击大图预览、多档缩放、键盘左右切换与加载重试。
+- 账号互动闭环：支持贴吧关注/取消关注、帖子收藏/取消收藏，回读服务端状态后即时刷新侧栏。
+- 检索与排序优化：支持全站与吧内双层搜索及排序切换（最新/相关），贴吧支持时间排序与「只看精华」筛选。
+- 隔离登录与安全存储：系统 WebKit 原生隔离登录，会话凭据加密写入 Keychain，支持会话过期检测。
+- 自动更新与签名验证：集成 Sparkle 2 框架，支持 Ed25519 签名校验与 Universal 通用二进制分发。
+- 工程化与合规资产：引入根目录 Makefile、Homebrew Cask 分发规范、离线 UI 自动化测试审查与隐私合规声明。
 
 ### English
 
-- Establish a native macOS 14+ project with SwiftPM and app bundle packaging.
-- Reuse upstream protocol, mapping, state coordination, and core regression tests.
-- Add sidebar and stack navigation, search, forum browsing, and WebKit login.
-- Reuse the upstream app icon and add a full-page light/dark screenshot script.
-- Remove the iOS project, action extension, touch transitions, IPA scripts, and simulator CI.
-- Unify TiebaPure-Mac app naming and cache prefixes; add a build-and-run script.
-- Use a transparent Mac app icon and publish local bundles under `artifacts/macos`.
-- Localize native menus and add menu actions for refresh, appearance, and release history.
-- Integrate signed Sparkle updates and a notarized Universal release workflow.
+- Establish native macOS 14+ SwiftPM project and `.app` bundle pipeline, removing legacy iOS dependencies.
+- Add desktop sidebar navigation and single-window reader, featuring continuous floor scrolling, author-only reading, and subpost inspector.
+- Preserve and restore scroll positions and reading progress across sections, with keyboard-driven history navigation.
+- Native image preview: click post and subpost images for full-size inspection, zoom, keyboard navigation, and retry handling.
+- Account library loop: follow/unfollow forums and bookmark/unbookmark threads with server readback verification and live sidebar updates.
+- Search and sorting: site-wide and in-forum search with latest/relevance sorting, and forum thread time sorting with featured topic filtering.
+- Isolated login and secure storage: WebKit container authentication, Keychain session encryption, and proactive expiration detection.
+- Signed auto-updates: Sparkle 2 framework integration with Ed25519 signature verification and Universal binary distribution.
+- Engineering and compliance: root Makefile, Homebrew Cask distribution, automated offline UI review suites, and privacy documentation.

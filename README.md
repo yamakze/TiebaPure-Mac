@@ -27,6 +27,10 @@ SwiftUI · AppKit · WebKit Login · SwiftPM · Sparkle Auto-Update
     <td width="50%"><img src="docs/screenshots/screenshot-subposts.png" alt="Subpost Inspector Sidebar" /></td>
     <td width="50%"><img src="docs/screenshots/screenshot-forum.png" alt="Forum Browsing & Filtering" /></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/screenshot-search.png" alt="Site-Wide & Forum Search" /></td>
+    <td width="50%"><img src="docs/screenshots/screenshot-preview.png" alt="Native Image Preview & Zoom" /></td>
+  </tr>
 </table>
 
 </div>
