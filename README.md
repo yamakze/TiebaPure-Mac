@@ -78,8 +78,6 @@ It preserves full upstream Git history and original author attributions while re
 
 System requirements: macOS 14+ (Sonoma or later), Apple Silicon and Intel Universal support.
 
-The `v0.1.0` preview is ad-hoc signed and has no Apple notarization. Preview builds are updated manually. macOS may require you to allow the app once in Privacy & Security. [Apple's instructions](https://support.apple.com/en-us/102445)
-
 ### Homebrew
 
 ```bash

@@ -78,8 +78,6 @@ SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
 
 系统要求：macOS 14+，支持 Apple Silicon 与 Intel 架构。
 
-`v0.1.0` 试用版使用 ad-hoc 签名，未经过 Apple 公证，需要手动下载更新。macOS 可能要求你在「隐私与安全性」中允许打开应用。[Apple 操作说明](https://support.apple.com/zh-cn/102445)
-
 ### 通过 Homebrew 安装
 
 ```bash
