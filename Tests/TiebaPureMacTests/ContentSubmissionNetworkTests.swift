@@ -280,28 +280,9 @@ final class ContentSubmissionRequestFactoryTests: XCTestCase {
 
 #if DEBUG
 final class FixtureContentSubmissionTests: XCTestCase {
-    func testSuccessfulSubmissionsAreVisibleInSubsequentFixtureReads() async throws {
+    func testSuccessfulRepliesAreVisibleInSubsequentFixtureReads() async throws {
         let api = FixtureTiebaAPI()
         let account = FixtureTiebaAPI.account
-
-        let newThread = ContentSubmissionRequest(
-            target: .newThread(in: FixtureTiebaAPI.forum),
-            title: "发布后可见的夹具主题",
-            body: "新主题正文",
-            images: []
-        )
-        let threadReceipt = try await api.submitContent(account: account, request: newThread)
-        let submittedThreadPage = try await api.threadPage(
-            account: account,
-            threadID: threadReceipt.threadID,
-            page: 1,
-            forumID: FixtureTiebaAPI.forum.id,
-            postID: nil,
-            seeLz: false,
-            sortType: .ascending
-        )
-        XCTAssertEqual(submittedThreadPage.mainPost?.author.id, Int64(account.uid))
-        XCTAssertEqual(submittedThreadPage.mainPost?.contentPreview, newThread.body)
 
         let threadReply = ContentSubmissionRequest(
             target: Self.target(kind: .threadReply),

@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class ContentSubmissionCoordinatorTests: XCTestCase {
-    func testFixtureNewThreadMatchingComposerRequestCompletesAndIsVisible() async throws {
+    func testFixtureNewThreadIsVisibleInForumAndThreadDetails() async throws {
         let api = FixtureTiebaAPI()
         let coordinator = ContentSubmissionCoordinator(api: api)
         let account = FixtureTiebaAPI.account
@@ -28,6 +28,19 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
         let submitted = try XCTUnwrap(threads.first(where: { $0.id == receipt.threadID }))
         XCTAssertEqual(submitted.title, request.title)
         XCTAssertEqual(submitted.textPreview, TiebaEmoticon.plainDisplayText(request.body))
+
+        let page = try await api.threadPage(
+            account: account,
+            threadID: receipt.threadID,
+            page: 1,
+            forumID: FixtureTiebaAPI.forum.id,
+            postID: nil,
+            seeLz: false,
+            sortType: .ascending
+        )
+        let mainPost = try XCTUnwrap(page.mainPost)
+        XCTAssertEqual(mainPost.author.id, Int64(account.uid))
+        XCTAssertEqual(mainPost.contentPreview, TiebaEmoticon.plainDisplayText(request.body))
     }
 
     func testIdenticalConcurrentSubmissionsShareOneNetworkWrite() async throws {
