@@ -34,53 +34,26 @@ final class BrowsingHistoryStore: ObservableObject {
     ) {
         self.defaults = defaults
         self.key = key
-        self.limit = min(max(limit, 0), BrowsingHistoryPolicy.maximumStoredEntries)
+        let configuredLimit = min(max(limit, 0), BrowsingHistoryPolicy.maximumStoredEntries)
+        self.limit = configuredLimit
         self.now = now
         self.persistence = persistence
         self.faultInjector = faultInjector
-        let initialAvailability = persistence.capability.availability
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
-        self.persistenceAvailability = initialAvailability
-        var legacyFallback: [BrowsingHistoryEntry]?
-        var migrationFailed = false
-        do {
-            try Self.migrateLegacyStorage(
-                defaults: defaults,
-                key: key,
-                persistence: persistence,
-                limit: self.limit,
-                legacyFallback: &legacyFallback,
-                faultInjector: faultInjector
-            )
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "migrate browsing history")
-            self.persistenceAvailability = .unavailable
-            migrationFailed = true
-        }
-        if persistence.capability.canAccessBackend {
-            do {
-                let result = try Self.loadAndRepairItems(
-                    persistence: persistence,
-                    limit: self.limit,
-                    canRepair: persistentBackendIsAvailable,
-                    faultInjector: faultInjector
-                )
-                items = result.value
-                if let error = result.repairError {
-                    PersistenceDiagnostics.report(error, operation: "repair browsing history")
-                    self.persistenceAvailability = .unavailable
-                }
-            } catch {
-                PersistenceDiagnostics.report(error, operation: "load browsing history")
-                items = migrationFailed ? (legacyFallback ?? []) : []
-                self.persistenceAvailability = .unavailable
-            }
-        } else {
-            items = legacyFallback ?? []
-        }
-        if migrationFailed, items.isEmpty, let legacyFallback {
-            items = legacyFallback
-        }
+        let snapshot = HistoryStorage.initialSnapshot(
+            capability: persistence.capability,
+            collection: "browsing history",
+            defaults: defaults,
+            legacyKey: key,
+            legacyValue: defaults.data(forKey: key),
+            decodeLegacy: { PersistedArrayDecoder.decode(BrowsingHistoryEntry.self, from: $0) },
+            load: persistence.load,
+            replaceAll: persistence.replaceAll,
+            sanitize: { BrowsingHistoryPolicy.sanitized($0, limit: configuredLimit) },
+            faultInjector: faultInjector
+        )
+        items = snapshot.items
+        persistenceAvailability = snapshot.availability
     }
 
     @discardableResult
@@ -93,10 +66,11 @@ final class BrowsingHistoryStore: ObservableObject {
         // queued. Do not let a synchronous main-context repair race that save.
         guard pendingMutationCount == 0 else { return false }
         do {
-            let result = try Self.loadAndRepairItems(
-                persistence: persistence,
-                limit: limit,
+            let result = HistoryStorage.repair(
+                try persistence.load(),
                 canRepair: persistentBackendIsAvailable,
+                replaceAll: persistence.replaceAll,
+                sanitize: { BrowsingHistoryPolicy.sanitized($0, limit: limit) },
                 faultInjector: faultInjector
             )
             items = result.value
@@ -297,75 +271,5 @@ final class BrowsingHistoryStore: ObservableObject {
     private func markPersistenceSucceeded() {
         guard persistentBackendIsAvailable else { return }
         persistenceAvailability = .available
-    }
-
-    private static func loadAndRepairItems(
-        persistence: any BrowsingHistoryPersistence,
-        limit: Int,
-        canRepair: Bool,
-        faultInjector: PersistenceFaultInjector = .none
-    ) throws -> PersistenceLoadResult<[BrowsingHistoryEntry]> {
-        let raw = try persistence.load()
-        let sanitized = BrowsingHistoryPolicy.sanitized(
-            raw,
-            limit: limit
-        )
-        if canRepair, raw != sanitized {
-            do {
-                try persistence.replaceAll(sanitized) {
-                    try faultInjector.check(.repair)
-                }
-            } catch {
-                return PersistenceLoadResult(value: sanitized, repairError: error)
-            }
-        }
-        return PersistenceLoadResult(value: sanitized, repairError: nil)
-    }
-
-    // One-time import of the pre-SwiftData UserDefaults JSON blob.
-    private static func migrateLegacyStorage(
-        defaults: UserDefaults,
-        key: String,
-        persistence: any BrowsingHistoryPersistence,
-        limit: Int,
-        legacyFallback: inout [BrowsingHistoryEntry]?,
-        faultInjector: PersistenceFaultInjector
-    ) throws {
-        guard let data = defaults.data(forKey: key) else { return }
-        let decodedLegacy = {
-            PersistedArrayDecoder.decode(BrowsingHistoryEntry.self, from: data)
-                .map { BrowsingHistoryPolicy.sanitized($0, limit: limit) }
-        }
-        guard persistence.capability.canAccessBackend else {
-            legacyFallback = decodedLegacy()
-            return
-        }
-        let existing: [BrowsingHistoryEntry]
-        do {
-            existing = try persistence.load()
-        } catch {
-            legacyFallback = decodedLegacy()
-            throw error
-        }
-        let source: [BrowsingHistoryEntry]
-        if existing.isEmpty {
-            guard let decoded = decodedLegacy() else {
-                throw LegacyStorageMigration.DecodeError.invalidTopLevelArray
-            }
-            source = decoded
-            legacyFallback = source
-        } else {
-            source = existing
-        }
-        let sanitized = BrowsingHistoryPolicy.sanitized(source, limit: limit)
-        try LegacyStorageMigration.persistThenRemoveLegacyValue(
-            defaults: defaults,
-            key: key,
-            destinationIsDurable: persistence.capability.isDurable
-        ) {
-            try persistence.replaceAll(sanitized) {
-                try faultInjector.check(.legacyMigration)
-            }
-        }
     }
 }

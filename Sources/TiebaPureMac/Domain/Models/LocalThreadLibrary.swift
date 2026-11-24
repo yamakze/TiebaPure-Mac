@@ -1,43 +1,4 @@
-import CryptoKit
 import Foundation
-
-enum LocalThreadListSearchPolicy {
-    static func matches(query: String, fields: [String?]) -> Bool {
-        let terms = query
-            .split(whereSeparator: \.isWhitespace)
-            .map(String.init)
-        guard terms.isEmpty == false else { return true }
-
-        let searchableText = fields.compactMap { $0 }.joined(separator: "\n")
-        let options: String.CompareOptions = [
-            .caseInsensitive,
-            .diacriticInsensitive,
-            .widthInsensitive
-        ]
-        return terms.allSatisfy { term in
-            searchableText.range(of: term, options: options) != nil
-        }
-    }
-}
-
-enum LocalThreadListSelectionPolicy {
-    static func retainedSelection(
-        _ selection: Set<Int64>,
-        visibleThreadIDs: [Int64]
-    ) -> Set<Int64> {
-        selection.intersection(Set(visibleThreadIDs))
-    }
-
-    static func selectionByTogglingAll(
-        _ selection: Set<Int64>,
-        visibleThreadIDs: [Int64]
-    ) -> Set<Int64> {
-        let visible = Set(visibleThreadIDs)
-        guard visible.isEmpty == false else { return [] }
-        let retained = selection.intersection(visible)
-        return retained == visible ? [] : visible
-    }
-}
 
 struct ThreadReadingPosition: Codable, Equatable, Identifiable, Sendable {
     var threadID: Int64
@@ -107,13 +68,4 @@ enum LocalThreadLibraryPolicy {
 
         return result
     }
-
-    private static func normalized(_ value: String, maximumLength: Int) -> String {
-        let collapsed = value
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { $0.isEmpty == false }
-            .joined(separator: " ")
-        return String(collapsed.prefix(maximumLength))
-    }
 }
-

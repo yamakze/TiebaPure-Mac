@@ -1,21 +1,15 @@
 import SwiftUI
-import ImageIO
+import CoreGraphics
 
 struct MacRemoteImage: View {
     let url: URL
     var maximumPixelSize = 1600
     var contentMode: ContentMode = .fit
     var placeholder: String?
-    var preview: (shareURL: URL, open: (NSImage?) -> Void)?
-
-    private static let thumbnails: NSCache<NSString, CGImage> = {
-        let cache = NSCache<NSString, CGImage>()
-        cache.totalCostLimit = 16 * 1024 * 1024
-        return cache
-    }()
+    var preview: (shareURL: URL, open: (CGImage?) -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var image: NSImage?
+    @State private var image: CGImage?
     @State private var failed = false
 
     var body: some View {
@@ -47,7 +41,9 @@ struct MacRemoteImage: View {
             image = nil
             failed = false
             do {
-                image = try await Self.load(url: url, maximumPixelSize: maximumPixelSize)
+                let loaded = try await ReaderImageLoader.thumbnail(url: url, maximumPixelSize: maximumPixelSize)
+                try Task.checkCancellation()
+                image = loaded
             } catch {
                 if !Task.isCancelled { failed = true }
             }
@@ -57,7 +53,7 @@ struct MacRemoteImage: View {
     @ViewBuilder
     private var content: some View {
         if let image {
-            Image(nsImage: image).resizable().aspectRatio(contentMode: contentMode)
+            Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: contentMode)
         } else if let placeholder {
             Image(systemName: placeholder)
                 .resizable().scaledToFit().padding(4)
@@ -69,35 +65,5 @@ struct MacRemoteImage: View {
         } else {
             ProgressView().controlSize(.small)
         }
-    }
-
-    static func load(url: URL, maximumPixelSize: Int) async throws -> NSImage {
-        let thumbnail = try await thumbnail(url: url, maximumPixelSize: maximumPixelSize)
-        try Task.checkCancellation()
-        return NSImage(cgImage: thumbnail, size: .zero)
-    }
-
-    private static func thumbnail(url: URL, maximumPixelSize: Int) async throws -> CGImage {
-#if DEBUG
-        if let fixture = ScreenshotThumbnail.image(url: url, maximumPixelSize: maximumPixelSize) {
-            return fixture
-        }
-#endif
-        let cacheKey: NSString? = maximumPixelSize <= 192 && !url.isFileURL
-            ? "\(maximumPixelSize):\(url.absoluteString)" as NSString
-            : nil
-        if let cacheKey, let cached = thumbnails.object(forKey: cacheKey) { return cached }
-        let payload = try await TiebaImageDownloadClient.shared.download(from: url)
-        try Task.checkCancellation()
-        guard let source = CGImageSourceCreateWithData(payload.data as CFData, nil),
-              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: maximumPixelSize
-              ] as CFDictionary) else { throw TiebaImageDownloadError.invalidImageData }
-        if let cacheKey {
-            thumbnails.setObject(thumbnail, forKey: cacheKey, cost: thumbnail.bytesPerRow * thumbnail.height)
-        }
-        return thumbnail
     }
 }

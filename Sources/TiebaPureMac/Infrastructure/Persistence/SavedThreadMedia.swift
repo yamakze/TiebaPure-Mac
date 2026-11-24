@@ -914,21 +914,3 @@ final class SavedThreadMediaStore: @unchecked Sendable {
         ], ofItemAtPath: url.path)
     }
 }
-
-struct SavedThreadUpdateService {
-    let api: any TiebaAPIService
-
-    func latestReplyCount(snapshot: SavedThreadSnapshot, account: Account?) async throws -> Int {
-        let page = try await api.threadPage(
-            account: account,
-            threadID: snapshot.id,
-            page: 1,
-            forumID: snapshot.forum.id,
-            postID: nil,
-            seeLz: false,
-            sortType: .ascending
-        )
-        guard page.thread.id == snapshot.id else { throw SavedThreadError.inconsistentPagination }
-        return max(page.thread.replyCount, snapshot.thread.replyCount)
-    }
-}

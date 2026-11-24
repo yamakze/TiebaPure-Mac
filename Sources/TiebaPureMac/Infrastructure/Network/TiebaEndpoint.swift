@@ -38,8 +38,6 @@ enum TiebaEndpoint {
     case webAddThread
     case webAddPost(timestamp: Int64)
     case webUploadPicture(nonce: String)
-    case addPost
-    case uploadPicture
 
     var url: URL {
         switch self {
@@ -141,12 +139,6 @@ enum TiebaEndpoint {
                     .init(name: "type", value: "ajax"),
                     .init(name: "r", value: nonce)
                 ])
-        case .addPost:
-            return Self.protobufBase
-                .appending(path: "/c/c/post/add")
-                .appending(queryItems: [.init(name: "cmd", value: "309731")])
-        case .uploadPicture:
-            return Self.protobufBase.appending(path: "/c/s/uploadPicture")
         }
     }
 }

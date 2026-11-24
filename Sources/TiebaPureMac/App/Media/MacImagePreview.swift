@@ -15,7 +15,7 @@ struct MacImagePreviewSelection: Identifiable {
     let id = UUID()
     let images: [MacPreviewImage]
     let index: Int
-    let thumbnail: NSImage?
+    let thumbnail: CGImage?
 }
 
 struct MacImagePreview: View {
@@ -81,13 +81,13 @@ struct MacImagePreview: View {
 private struct MacImagePreviewPage: View {
     let source: MacPreviewImage
     @Binding var zoom: CGFloat
-    @State private var thumbnail: NSImage?
-    @State private var fullSizeImage: NSImage?
+    @State private var thumbnail: CGImage?
+    @State private var fullSizeImage: CGImage?
     @State private var thumbnailUnavailable = false
     @State private var failed = false
     @State private var retry = 0
 
-    init(source: MacPreviewImage, zoom: Binding<CGFloat>, thumbnail: NSImage?) {
+    init(source: MacPreviewImage, zoom: Binding<CGFloat>, thumbnail: CGImage?) {
         self.source = source
         _zoom = zoom
         _thumbnail = State(initialValue: thumbnail)
@@ -133,7 +133,8 @@ private struct MacImagePreviewPage: View {
             // Only a separate thumbnail can arrive ahead of the full-size request.
             guard thumbnail == nil, let url = source.thumbnailURL, url != source.fullSizeURL else { return }
             do {
-                let image = try await MacRemoteImage.load(url: url, maximumPixelSize: 1600)
+                let image = try await ReaderImageLoader.thumbnail(url: url, maximumPixelSize: 1600)
+                try Task.checkCancellation()
                 if fullSizeImage == nil { thumbnail = image }
             } catch {
                 if !Task.isCancelled { thumbnailUnavailable = true }
@@ -141,7 +142,9 @@ private struct MacImagePreviewPage: View {
         }
         .task(id: retry) {
             do {
-                fullSizeImage = try await MacRemoteImage.load(url: source.fullSizeURL, maximumPixelSize: 4096)
+                let loaded = try await ReaderImageLoader.thumbnail(url: source.fullSizeURL, maximumPixelSize: 4096)
+                try Task.checkCancellation()
+                fullSizeImage = loaded
                 thumbnail = nil
             } catch {
                 if !Task.isCancelled { failed = true }
@@ -151,7 +154,7 @@ private struct MacImagePreviewPage: View {
 }
 
 private struct MacZoomableImage: View {
-    let image: NSImage
+    let image: CGImage
     @Binding var zoom: CGFloat
     @State private var offset: CGSize = .zero
     @GestureState private var drag: CGSize = .zero
@@ -160,18 +163,19 @@ private struct MacZoomableImage: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let fit = min(size.width / image.size.width, size.height / image.size.height)
+            let imageWidth = CGFloat(image.width)
+            let imageHeight = CGFloat(image.height)
+            let fit = min(size.width / imageWidth, size.height / imageHeight)
             let scale = min(5, max(1, zoom * magnification))
-            let width = image.size.width * fit * scale
-            let height = image.size.height * fit * scale
+            let width = imageWidth * fit * scale
+            let height = imageHeight * fit * scale
             let limit = CGSize(width: max(0, (width - size.width) / 2), height: max(0, (height - size.height) / 2))
             let position = clamped(CGSize(width: offset.width + drag.width, height: offset.height + drag.height), to: limit)
 
-            Image(nsImage: image)
+            Image(image, scale: 1, label: Text("帖子图片"))
                 .resizable()
                 .frame(width: width, height: height)
                 .position(x: size.width / 2 + position.width, y: size.height / 2 + position.height)
-                .accessibilityLabel("帖子图片")
                 .accessibilityIdentifier("image-preview-display")
                 .gesture(
                     DragGesture()

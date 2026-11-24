@@ -39,48 +39,64 @@ struct ReaderPages<Item: Identifiable> {
         let replacesItems: Bool
     }
 
+    private enum LoadPhase {
+        case notStarted
+        case loading(Request)
+        case loaded
+        case failed(Request, String)
+    }
+
     private(set) var items: [Item] = []
     private var seen: Set<Item.ID> = []
-    private(set) var request: Request?
-    private(set) var error: String?
-    private var failedRequest: Request?
+    private var phase = LoadPhase.notStarted
     private(set) var nextPage: Int?
+
+    var request: Request? {
+        guard case let .loading(request) = phase else { return nil }
+        return request
+    }
+
+    var error: String? {
+        guard case let .failed(_, message) = phase else { return nil }
+        return message
+    }
+
+    mutating func loadInitialPage() {
+        guard case .notStarted = phase else { return }
+        reload()
+    }
 
     mutating func reload(clear: Bool = false) {
         if clear { self = Self() }
-        error = nil
-        failedRequest = nil
-        request = Request(page: 1, replacesItems: true)
+        phase = .loading(Request(page: 1, replacesItems: true))
     }
 
     mutating func loadNext() {
-        guard request == nil, error == nil, let nextPage else { return }
-        request = Request(page: nextPage, replacesItems: false)
+        guard case .loaded = phase, let nextPage else { return }
+        phase = .loading(Request(page: nextPage, replacesItems: false))
     }
 
     mutating func retry() {
-        guard let failedRequest else { return }
-        error = nil
-        self.failedRequest = nil
-        request = Request(page: failedRequest.page, replacesItems: failedRequest.replacesItems)
+        guard case let .failed(failedRequest, _) = phase else { return }
+        phase = .loading(Request(page: failedRequest.page, replacesItems: failedRequest.replacesItems))
     }
 
-    mutating func accept(_ incoming: [Item], nextPage: Int?, for request: Request) {
+    mutating func accept(_ incoming: [Item], nextPage: Int?, totalCount: Int? = nil, for request: Request) {
         guard self.request == request else { return }
         if request.replacesItems {
             items = []
             seen = []
         }
-        items += incoming.filter { seen.insert($0.id).inserted }
-        self.nextPage = nextPage
-        self.request = nil
+        for item in incoming where seen.insert(item.id).inserted {
+            items.append(item)
+        }
+        self.nextPage = totalCount.map { items.count >= $0 } == true ? nil : nextPage
+        phase = .loaded
     }
 
     mutating func fail(_ error: Error, for request: Request) {
         guard self.request == request else { return }
-        self.error = ReaderErrorMessage.message(for: error)
-        failedRequest = request
-        self.request = nil
+        phase = .failed(request, ReaderErrorMessage.message(for: error))
     }
 }
 

@@ -77,8 +77,7 @@ enum ThreadPageMainPostPolicy {
     static func merging(
         _ incoming: ThreadPage,
         previousMainPost: Post?,
-        previousMainPostIsSummaryFallback: Bool = false,
-        requestedPage: Int
+        previousMainPostIsSummaryFallback: Bool = false
     ) -> ThreadPage {
         var merged = incoming
         if let incomingMainPost = mainPost(in: incoming) {

@@ -8,12 +8,13 @@ protocol AccountStoreService: Sendable {
     func clearData() async throws
 }
 
-final class AccountStore: ObservableObject {
+final class AccountStore {
     private let service: AccountStoreService
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let operationLock = AccountStoreOperationLock()
-    let accountDidChange = PassthroughSubject<Account?, Never>()
+    private let accountChanges = PassthroughSubject<Account?, Never>()
+    var accountDidChange: AnyPublisher<Account?, Never> { accountChanges.eraseToAnyPublisher() }
 
     init(service: AccountStoreService) {
         self.service = service
@@ -34,7 +35,11 @@ final class AccountStore: ObservableObject {
             }
             return account
         } catch {
-            try? await service.clearData()
+            do {
+                try await service.clearData()
+            } catch {
+                throw AccountStoreError.invalidCredentialCleanupFailed(error as NSError)
+            }
             throw error
         }
     }
@@ -74,13 +79,13 @@ final class AccountStore: ObservableObject {
         // fields (including a complete Cookie header) cannot reappear.
         let restorablePreviousData = previousAccount.flatMap { try? encoder.encode($0) }
         let data = try encoder.encode(account)
+        try Task.checkCancellation()
         do {
-            try Task.checkCancellation()
             try await service.saveData(data)
             try Task.checkCancellation()
             try await MainActor.run {
                 try Task.checkCancellation()
-                accountDidChange.send(account)
+                accountChanges.send(account)
             }
             // Publishing the account is the commit point. Subscribers are
             // expected to dismiss the login view, which cancels its validation
@@ -97,7 +102,7 @@ final class AccountStore: ObservableObject {
                 throw AccountStoreError.cancellationRollbackFailed
             }
             await MainActor.run {
-                accountDidChange.send(previousAccount)
+                accountChanges.send(previousAccount)
             }
             throw CancellationError()
         }
@@ -107,7 +112,7 @@ final class AccountStore: ObservableObject {
         try await withExclusiveOperation {
             try await service.clearData()
             await MainActor.run {
-                accountDidChange.send(nil)
+                accountChanges.send(nil)
             }
         }
     }
@@ -228,7 +233,8 @@ struct KeychainAccountStoreService: AccountStoreService {
         let status = securityOperations.copyMatching(query as CFDictionary, result: &result)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess else { throw KeychainError.status(status) }
-        return result as? Data
+        guard let data = result as? Data else { throw KeychainError.invalidItemAttributes }
+        return data
     }
 
     func saveData(_ data: Data) async throws {
@@ -278,6 +284,7 @@ enum KeychainError: Error, Equatable {
 
 enum AccountStoreError: Error, Equatable {
     case cancellationRollbackFailed
+    case invalidCredentialCleanupFailed(NSError)
     case invalidCredentials
     case sessionChanged
 }

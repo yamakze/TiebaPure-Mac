@@ -27,49 +27,21 @@ final class SearchHistoryStore: ObservableObject {
         self.limit = configuredLimit
         self.persistence = persistence
         self.faultInjector = faultInjector
-        let initialAvailability = persistence.capability.availability
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
-        self.persistenceAvailability = initialAvailability
-        var legacyFallback: [String]?
-        var migrationFailed = false
-        do {
-            try Self.migrateLegacyStorage(
-                defaults: defaults,
-                key: key,
-                persistence: persistence,
-                limit: configuredLimit,
-                legacyFallback: &legacyFallback,
-                faultInjector: faultInjector
-            )
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "migrate search history")
-            self.persistenceAvailability = .unavailable
-            migrationFailed = true
-        }
-        if persistence.capability.canAccessBackend {
-            do {
-                let result = try Self.loadAndRepairItems(
-                    persistence: persistence,
-                    limit: configuredLimit,
-                    canRepair: persistentBackendIsAvailable,
-                    faultInjector: faultInjector
-                )
-                items = result.value
-                if let error = result.repairError {
-                    PersistenceDiagnostics.report(error, operation: "repair search history")
-                    self.persistenceAvailability = .unavailable
-                }
-            } catch {
-                PersistenceDiagnostics.report(error, operation: "load search history")
-                items = migrationFailed ? (legacyFallback ?? []) : []
-                self.persistenceAvailability = .unavailable
-            }
-        } else {
-            items = legacyFallback ?? []
-        }
-        if migrationFailed, items.isEmpty, let legacyFallback {
-            items = legacyFallback
-        }
+        let snapshot = HistoryStorage.initialSnapshot(
+            capability: persistence.capability,
+            collection: "search history",
+            defaults: defaults,
+            legacyKey: key,
+            legacyValue: defaults.object(forKey: key),
+            decodeLegacy: { _ in defaults.stringArray(forKey: key) },
+            load: persistence.load,
+            replaceAll: persistence.replaceAll,
+            sanitize: { SearchHistoryPolicy.sanitized($0, limit: configuredLimit) },
+            faultInjector: faultInjector
+        )
+        items = snapshot.items
+        persistenceAvailability = snapshot.availability
     }
 
     @discardableResult
@@ -79,10 +51,11 @@ final class SearchHistoryStore: ObservableObject {
             return false
         }
         do {
-            let result = try Self.loadAndRepairItems(
-                persistence: persistence,
-                limit: limit,
+            let result = HistoryStorage.repair(
+                try persistence.load(),
                 canRepair: persistentBackendIsAvailable,
+                replaceAll: persistence.replaceAll,
+                sanitize: { SearchHistoryPolicy.sanitized($0, limit: limit) },
                 faultInjector: faultInjector
             )
             items = result.value
@@ -140,75 +113,5 @@ final class SearchHistoryStore: ObservableObject {
     private func markPersistenceSucceeded() {
         guard persistentBackendIsAvailable else { return }
         persistenceAvailability = .available
-    }
-
-    private static func loadAndRepairItems(
-        persistence: any SearchHistoryPersistence,
-        limit: Int,
-        canRepair: Bool,
-        faultInjector: PersistenceFaultInjector = .none
-    ) throws -> PersistenceLoadResult<[String]> {
-        let raw = try persistence.load()
-        let sanitized = SearchHistoryPolicy.sanitized(
-            raw,
-            limit: limit
-        )
-        if canRepair, raw != sanitized {
-            do {
-                try persistence.replaceAll(sanitized) {
-                    try faultInjector.check(.repair)
-                }
-            } catch {
-                return PersistenceLoadResult(value: sanitized, repairError: error)
-            }
-        }
-        return PersistenceLoadResult(value: sanitized, repairError: nil)
-    }
-
-    // One-time import of the pre-SwiftData UserDefaults string array.
-    private static func migrateLegacyStorage(
-        defaults: UserDefaults,
-        key: String,
-        persistence: any SearchHistoryPersistence,
-        limit: Int,
-        legacyFallback: inout [String]?,
-        faultInjector: PersistenceFaultInjector
-    ) throws {
-        guard defaults.object(forKey: key) != nil else { return }
-        let decodedLegacy = {
-            defaults.stringArray(forKey: key)
-                .map { SearchHistoryPolicy.sanitized($0, limit: limit) }
-        }
-        guard persistence.capability.canAccessBackend else {
-            legacyFallback = decodedLegacy()
-            return
-        }
-        let existing: [String]
-        do {
-            existing = try persistence.load()
-        } catch {
-            legacyFallback = decodedLegacy()
-            throw error
-        }
-        let source: [String]
-        if existing.isEmpty {
-            guard let legacy = decodedLegacy() else {
-                throw LegacyStorageMigration.DecodeError.invalidTopLevelArray
-            }
-            source = legacy
-            legacyFallback = source
-        } else {
-            source = existing
-        }
-        let sanitized = SearchHistoryPolicy.sanitized(source, limit: limit)
-        try LegacyStorageMigration.persistThenRemoveLegacyValue(
-            defaults: defaults,
-            key: key,
-            destinationIsDurable: persistence.capability.isDurable
-        ) {
-            try persistence.replaceAll(sanitized) {
-                try faultInjector.check(.legacyMigration)
-            }
-        }
     }
 }

@@ -1094,3 +1094,21 @@ private extension KeyedDecodingContainer {
         return Date(timeIntervalSince1970: seconds)
     }
 }
+
+// Both forum transports use the same category fields.
+extension ForumThreadCategory {
+    var sortType: Int {
+        switch self {
+        case .replyTime:
+            return 0
+        case .publishTime:
+            return 1
+        case .featured:
+            return -1
+        }
+    }
+
+    var goodClassifyID: Int? {
+        self == .featured ? 0 : nil
+    }
+}

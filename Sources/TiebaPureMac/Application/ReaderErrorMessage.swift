@@ -34,6 +34,10 @@ enum ReaderErrorMessage {
             return loginError.description
         }
 
+        if let sessionError = error as? ReaderSessionError {
+            return sessionError.localizedDescription
+        }
+
         if let profileError = error as? UserProfileAPIError {
             return profileError.description
         }
@@ -44,6 +48,10 @@ enum ReaderErrorMessage {
 
         if let mutationError = error as? TiebaMutationError {
             return mutationError.description
+        }
+
+        if case .invalidCredentialCleanupFailed = error as? AccountStoreError {
+            return "无法清除本机无效的登录凭据。"
         }
 
         if error is KeychainError || error is AccountStoreError {

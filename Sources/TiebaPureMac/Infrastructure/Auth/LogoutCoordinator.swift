@@ -85,7 +85,7 @@ final class LogoutCoordinator {
             endWriteInvalidation()
             throw error
         }
-        // Keep writes blocked while signed out. RootView releases the barrier
+        // Keep writes blocked while signed out. MacSession releases the barrier
         // only after a non-nil account has become the active session.
     }
 }

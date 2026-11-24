@@ -1,5 +1,10 @@
 import Foundation
 
+enum ThreadSearchOrder: CaseIterable {
+    case latest
+    case relevance
+}
+
 struct SearchResultsPage: Equatable, Sendable {
     var results: [SearchResult]
     var currentPage: Int

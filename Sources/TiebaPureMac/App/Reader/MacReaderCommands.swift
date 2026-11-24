@@ -19,14 +19,24 @@ enum ReaderSection: String, CaseIterable, Identifiable {
     }
 }
 
-enum ReaderSearchSort: Int, CaseIterable {
-    case latest = 5
-    case relevance = 2
-
+extension ThreadSearchOrder {
     var title: String {
         switch self {
         case .latest: "最新"
         case .relevance: "相关"
+        }
+    }
+}
+
+private extension ForumThreadCategory {
+    var sortOptionTitle: String {
+        switch self {
+        case .replyTime:
+            return "回复时间排序"
+        case .publishTime:
+            return "发帖时间排序"
+        case .featured:
+            return "精华"
         }
     }
 }
@@ -37,7 +47,7 @@ struct MacReaderActions {
     let reload: (() -> Void)?
     let back: (() -> Void)?
     let forward: (() -> Void)?
-    let searchSort: Binding<ReaderSearchSort>?
+    let searchSort: Binding<ThreadSearchOrder>?
     let forumSort: Binding<ForumThreadCategory>?
     let onlyFeatured: Binding<Bool>?
 }
@@ -70,7 +80,7 @@ struct MacReaderCommands: Commands {
             Divider()
             if let sort = actions?.searchSort {
                 Menu("搜索结果排序") {
-                    ForEach(ReaderSearchSort.allCases, id: \.self) { option in
+                    ForEach(ThreadSearchOrder.allCases, id: \.self) { option in
                         Button { sort.wrappedValue = option } label: {
                             if sort.wrappedValue == option { Label(option.title, systemImage: "checkmark") }
                             else { Text(option.title) }
@@ -81,7 +91,7 @@ struct MacReaderCommands: Commands {
             }
             if let sort = actions?.forumSort, let onlyFeatured = actions?.onlyFeatured {
                 Menu("吧内主题排序") {
-                    ForEach(ForumThreadCategory.latestSortOptions) { option in
+                    ForEach(ForumThreadCategory.timeSortOptions) { option in
                         Button { sort.wrappedValue = option } label: {
                             if sort.wrappedValue == option { Label(option.sortOptionTitle, systemImage: "checkmark") }
                             else { Text(option.sortOptionTitle) }

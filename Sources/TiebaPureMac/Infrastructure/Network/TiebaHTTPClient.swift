@@ -118,27 +118,6 @@ struct TiebaHTTPClient {
         return try Response(serializedBytes: data)
     }
 
-    func postRaw(
-        _ endpoint: TiebaEndpoint,
-        body: Data,
-        contentType: String,
-        headers: [String: String] = [:]
-    ) async throws -> Data {
-        var request = URLRequest(url: endpoint.url)
-        request.httpMethod = "POST"
-        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
-        request.setValue(headers["User-Agent"] ?? "bdtb for iPhone 12.35.1.0", forHTTPHeaderField: "User-Agent")
-        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
-        request.httpBody = body
-
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: maximumResponseBytes
-        )
-        try validate(response: response, data: data)
-        return data
-    }
-
     private func validate(response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else { throw TiebaHTTPError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
@@ -158,11 +137,6 @@ enum TiebaHTTPError: Error, Equatable {
 struct BoundedURLSessionProgress: Equatable, Sendable {
     let receivedBytes: Int
     let expectedBytes: Int?
-
-    var fractionCompleted: Double? {
-        guard let expectedBytes, expectedBytes > 0 else { return nil }
-        return min(max(Double(receivedBytes) / Double(expectedBytes), 0), 1)
-    }
 }
 
 struct BoundedURLSession: Sendable {

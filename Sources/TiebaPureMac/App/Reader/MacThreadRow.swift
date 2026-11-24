@@ -6,6 +6,10 @@ struct MacThreadRow: View {
 
     var body: some View {
         let preview = thread.textPreview
+        let date = switch forumCategory {
+        case .replyTime, .featured: thread.lastReplyAt ?? thread.createdAt
+        case .publishTime, nil: thread.createdAt ?? thread.lastReplyAt
+        }
         let thumbnails = Array(thread.blocks.lazy.compactMap { block -> URL? in
             guard case let .image(image) = block else { return nil }
             return image.thumbnailURL ?? image.originalURL
@@ -25,7 +29,7 @@ struct MacThreadRow: View {
                     }
                     Text(thread.author.displayNameResolved)
                     HStack(spacing: 7) {
-                        if let date = forumCategory?.metadata(for: thread).date ?? thread.createdAt ?? thread.lastReplyAt {
+                        if let date {
                             Text("·").accessibilityHidden(true)
                             Text(date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
                         }

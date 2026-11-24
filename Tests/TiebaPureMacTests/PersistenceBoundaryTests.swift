@@ -36,6 +36,7 @@ final class PersistenceBoundaryTests: XCTestCase {
 
         XCTAssertEqual(store.items, ["first", "SECOND"])
         XCTAssertEqual(persistence.values, ["first", "SECOND"])
+        XCTAssertEqual(persistence.loadCallCount, 1)
         XCTAssertEqual(persistence.replaceCallCount, 1)
         XCTAssertEqual(defaults.stringArray(forKey: key), [" first ", "SECOND", "second"])
         XCTAssertEqual(store.persistenceAvailability, .unavailable)
@@ -82,8 +83,67 @@ final class PersistenceBoundaryTests: XCTestCase {
 
         XCTAssertEqual(store.items, ["legacy"])
         XCTAssertEqual(defaults.stringArray(forKey: key), ["legacy"])
-        XCTAssertEqual(persistence.loadCallCount, 2)
+        XCTAssertEqual(persistence.loadCallCount, 1)
         XCTAssertEqual(persistence.replaceCallCount, 0)
+        XCTAssertEqual(store.persistenceAvailability, .unavailable)
+    }
+
+    @MainActor
+    func testMigrationUsesExistingSwiftDataAndRemovesLegacyAfterSuccessfulWrite() throws {
+        let defaults = try makeScratchDefaults()
+        let key = "existing-search-history"
+        defaults.set(["legacy"], forKey: key)
+        let persistence = TestSearchHistoryPersistence(values: [" first ", "FIRST"])
+
+        let store = SearchHistoryStore(defaults: defaults, key: key, persistence: persistence)
+
+        XCTAssertEqual(store.items, ["first"])
+        XCTAssertEqual(persistence.values, ["first"])
+        XCTAssertEqual(persistence.loadCallCount, 1)
+        XCTAssertEqual(persistence.replaceCallCount, 1)
+        XCTAssertNil(defaults.object(forKey: key))
+        XCTAssertEqual(store.persistenceAvailability, .available)
+    }
+
+    @MainActor
+    func testFailedMigrationKeepsOldValueAndShowsDecodedHistory() throws {
+        let defaults = try makeScratchDefaults()
+        let key = "failed-browsing-history-migration"
+        let entry = makeHistoryEntry(id: 7, title: "旧记录", visitedAt: 7)
+        let legacy = try JSONEncoder().encode([entry])
+        defaults.set(legacy, forKey: key)
+        let persistence = TestBrowsingHistoryPersistence()
+
+        let store = BrowsingHistoryStore(
+            defaults: defaults,
+            key: key,
+            persistence: persistence,
+            faultInjector: PersistenceFaultInjector { point in
+                if point == .legacyMigration { throw ExpectedError.replaceFailed }
+            }
+        )
+
+        XCTAssertEqual(store.items, [entry])
+        XCTAssertTrue(persistence.values.isEmpty)
+        XCTAssertEqual(persistence.loadCallCount, 1)
+        XCTAssertEqual(persistence.replaceCallCount, 1)
+        XCTAssertEqual(defaults.data(forKey: key), legacy)
+        XCTAssertEqual(store.persistenceAvailability, .unavailable)
+    }
+
+    @MainActor
+    func testMalformedLegacyDataIsRetainedWithoutWritingAnEmptySnapshot() throws {
+        let defaults = try makeScratchDefaults()
+        let key = "malformed-recent-forums"
+        let malformed = Data("{}".utf8)
+        defaults.set(malformed, forKey: key)
+        let persistence = TestRecentForumPersistence()
+
+        let store = RecentForumStore(defaults: defaults, key: key, persistence: persistence)
+
+        XCTAssertTrue(store.items.isEmpty)
+        XCTAssertEqual(persistence.replaceCallCount, 0)
+        XCTAssertEqual(defaults.data(forKey: key), malformed)
         XCTAssertEqual(store.persistenceAvailability, .unavailable)
     }
 

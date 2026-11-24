@@ -1,45 +1,8 @@
 import SwiftUI
 
-@Observable
-final class MacThreadReading {
-    enum ScrollTarget: Hashable {
-        case top
-        case post(UInt64)
-    }
-
-    let destinationID: String
-    let thread: ThreadSummary
-    var header: ThreadSummary?
-    var forumID: Int64?
-    var pages = ReaderPages<Post>()
-    var selectedReply: MacSubpostsReading?
-    var onlyAuthor = false
-    var targetPostID: UInt64?
-    var isFavorite: Bool?
-    var isUpdatingFavorite = false
-    var scrollPosition: ScrollTarget?
-
-    init(destinationID: String, thread: ThreadSummary, initialPostID: UInt64?) {
-        self.destinationID = destinationID
-        self.thread = thread
-        targetPostID = initialPostID
-    }
-}
-
-@Observable
-final class MacSubpostsReading {
-    let post: Post
-    var pages = ReaderPages<Subpost>()
-    var scrollPosition: Subpost.ID?
-
-    init(post: Post) {
-        self.post = post
-    }
-}
-
 struct MacThreadView: View {
     @EnvironmentObject private var session: MacSession
-    @Bindable var reading: MacThreadReading
+    @Bindable var reading: ThreadReadingState
     @State private var imagePreview: MacImagePreviewSelection?
 
     private var thread: ThreadSummary { reading.thread }
@@ -48,7 +11,9 @@ struct MacThreadView: View {
         floors
         .navigationTitle(reading.header?.forumDisplayNameResolved ?? thread.forumDisplayNameResolved ?? "帖子")
         .toolbar {
-            Toggle("只看楼主", systemImage: "person.crop.circle", isOn: $reading.onlyAuthor)
+            Toggle("只看楼主", systemImage: "person.crop.circle", isOn: Binding(
+                get: { reading.onlyAuthor }, set: reading.setOnlyAuthor
+            ))
                 .toggleStyle(.button)
                 .help("只看楼主")
                 .accessibilityIdentifier("only-thread-author")
@@ -91,11 +56,7 @@ struct MacThreadView: View {
             }
         }
         .sheet(item: $imagePreview) { MacImagePreview(selection: $0) }
-        .onAppear {
-            if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil {
-                reading.pages.reload()
-            }
-        }
+        .onAppear { reading.pages.loadInitialPage() }
         .task(id: reading.pages.request) { [request = reading.pages.request] in
             if let request { await loadPage(request) }
         }
@@ -108,11 +69,11 @@ struct MacThreadView: View {
                     .font(.title2.bold())
                     .textSelection(.enabled)
                     .padding(.bottom, 18)
-                    .id(MacThreadReading.ScrollTarget.top)
+                    .id(ThreadReadingState.ScrollTarget.top)
                 let authorID = reading.pages.items.first?.author.id
                 ForEach(reading.pages.items) { post in
                     floor(post, authorID: authorID)
-                        .id(MacThreadReading.ScrollTarget.post(post.id))
+                        .id(ThreadReadingState.ScrollTarget.post(post.id))
                 }
             }
             .scrollTargetLayout()
@@ -125,18 +86,6 @@ struct MacThreadView: View {
         .accessibilityIdentifier("thread-floors")
         .frame(maxWidth: 860)
         .frame(maxWidth: .infinity)
-        .onChange(of: reading.pages.items.first?.id) { old, new in
-            if old == nil, new != nil, let target = reading.targetPostID,
-               reading.pages.items.contains(where: { $0.id == target }) {
-                reading.scrollPosition = .post(target)
-            }
-        }
-        .onChange(of: reading.onlyAuthor) { _, _ in
-            reading.targetPostID = nil
-            reading.selectedReply = nil
-            reading.scrollPosition = .top
-            reading.pages.reload(clear: true)
-        }
     }
 
     private func floor(_ post: Post, authorID: Int64?) -> some View {
@@ -169,7 +118,7 @@ struct MacThreadView: View {
             MacContentBlocks(blocks: post.blocks) { imagePreview = $0 }
             if post.subpostCount > 0 {
                 Button("\(post.subpostCount) 条回复") {
-                    reading.selectedReply = MacSubpostsReading(post: post)
+                    reading.selectedReply = SubpostsReadingState(post: post)
                 }
                 .buttonStyle(.link)
                 .accessibilityIdentifier("replies-\(post.id)")
@@ -192,8 +141,8 @@ struct MacThreadView: View {
             }
             let incoming = try await session.api.threadPage(
                 account: account, threadID: thread.id, page: requestedPage,
-                forumID: reading.forumID ?? thread.forumID, postID: request.replacesItems && !onlyAuthor ? reading.targetPostID : nil,
-                seeLz: onlyAuthor
+                forumID: reading.forumID ?? thread.forumID, postID: request.replacesItems ? reading.pendingEntryPostID : nil,
+                onlyAuthor: onlyAuthor
             )
             try Task.checkCancellation()
             var posts = incoming.posts.filter { $0.floor != 1 }
@@ -201,7 +150,7 @@ struct MacThreadView: View {
                 var mainPost = ThreadPageMainPostPolicy.mainPost(in: incoming)
                 if mainPost == nil {
                     let first = try await session.api.threadPage(
-                        account: account, threadID: thread.id, page: 1, forumID: incoming.forum.id, seeLz: onlyAuthor
+                        account: account, threadID: thread.id, page: 1, forumID: incoming.forum.id, onlyAuthor: onlyAuthor
                     )
                     try Task.checkCancellation()
                     mainPost = ThreadPageMainPostPolicy.mainPost(in: first)
@@ -214,6 +163,7 @@ struct MacThreadView: View {
             reading.forumID = incoming.forum.id
             if request.replacesItems { reading.isFavorite = incoming.isCollected }
             reading.pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)
+            reading.locateEntryPost(in: posts)
         } catch {
             if !Task.isCancelled { reading.pages.fail(error, for: request) }
         }
@@ -224,7 +174,7 @@ private struct MacSubpostsView: View {
     @EnvironmentObject private var session: MacSession
     let threadID: Int64
     let forumID: Int64?
-    @Bindable var reading: MacSubpostsReading
+    @Bindable var reading: SubpostsReadingState
     let close: () -> Void
     let preview: (MacImagePreviewSelection) -> Void
 
@@ -264,16 +214,15 @@ private struct MacSubpostsView: View {
                     }
                 }
                 .contentMargins(14, for: .scrollContent)
-                .onAppear { if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil { reading.pages.reload() } }
+                .onAppear { reading.pages.loadInitialPage() }
                 .task(id: reading.pages.request) { [request = reading.pages.request] in
                     guard let request, reading.pages.request == request else { return }
                     do {
                         let incoming = try await session.api.subposts(account: session.account, threadID: threadID,
                                                                       postID: post.id, forumID: forumID, page: request.page)
                         try Task.checkCancellation()
-                        let count = Set(reading.pages.items.map(\.id)).union(incoming.map(\.id)).count
-                        reading.pages.accept(incoming, nextPage: !incoming.isEmpty && count < post.subpostCount ? request.page + 1 : nil,
-                                     for: request)
+                        reading.pages.accept(incoming, nextPage: incoming.isEmpty ? nil : request.page + 1,
+                                             totalCount: post.subpostCount, for: request)
                     } catch {
                         if !Task.isCancelled { reading.pages.fail(error, for: request) }
                     }

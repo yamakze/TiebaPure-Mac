@@ -46,10 +46,6 @@ enum AppModelContainer {
     }()
 
     static let shared = sharedResolution.container
-    static var sharedAvailability: PersistenceAvailability {
-        sharedResolution.availability
-    }
-
     /// Resolves a durable container first and degrades to an in-memory
     /// container only when opening the on-disk store fails. The durability bit
     /// is kept alongside the container so a fallback session can import legacy
@@ -114,13 +110,6 @@ enum PersistedRecordStore {
     ) throws -> [Record] {
         let records = try context.fetch(FetchDescriptor<Record>())
         return records.sorted { $0.sortIndex < $1.sortIndex }
-    }
-
-    static func fetchAll<Record: PersistentModel>(
-        _ type: Record.Type,
-        in context: ModelContext
-    ) throws -> [Record] {
-        try context.fetch(FetchDescriptor<Record>())
     }
 
     static func replaceAll<Record: OrderedPersistentRecord>(

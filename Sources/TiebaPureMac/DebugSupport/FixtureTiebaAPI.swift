@@ -220,7 +220,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
         }
         let result = SearchResult(
             threadID: threadID,
-            postID: 2002,
+            postID: testsReadingContinuity && keyword == "anchored" ? 2012 : 2002,
             forumID: Self.forum.id,
             forumName: forumName ?? Self.forum.name,
             forumAvatarURL: nil,
@@ -424,6 +424,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
                 floor.subpostCount = 0
                 posts.append(floor)
             }
+            if postID == 2012 { posts.removeAll { $0.floor < 12 } }
         } else if scenario == .macReader && page == 2 {
             var next = reply
             next.id = 2003
@@ -442,8 +443,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
             forum: Self.forum,
             mainPost: omitsMainPost ? nil : main,
             posts: posts,
-            currentPage: page,
-            totalPage: scenario == .macReader && !testsReadingContinuity && !seeLz ? 2 : 1,
+            currentPage: testsReadingContinuity && postID == 2012 ? 2 : page,
+            totalPage: scenario == .macReader && (!testsReadingContinuity || postID == 2012) && !seeLz ? 2 : 1,
             hasMore: scenario == .macReader && !testsReadingContinuity && !seeLz && page == 1,
             isCollected: isCollected
         )

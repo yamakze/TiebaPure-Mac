@@ -124,18 +124,16 @@ extension TiebaAPIService {
     func searchThreads(
         keyword: String,
         page: Int,
-        sortType: Int = 5,
-        filterType: Int = 2,
-        forumName: String? = nil,
-        pageSize: Int = 30
+        order: ThreadSearchOrder,
+        forumName: String?
     ) async throws -> SearchResultsPage {
         try await searchThreads(
             keyword: keyword,
             page: page,
-            sortType: sortType,
-            filterType: filterType,
+            sortType: order == .latest ? 5 : 2,
+            filterType: 2,
             forumName: forumName,
-            pageSize: pageSize
+            pageSize: 30
         )
     }
 
@@ -145,8 +143,7 @@ extension TiebaAPIService {
         page: Int,
         forumID: Int64? = nil,
         postID: UInt64? = nil,
-        seeLz: Bool = false,
-        sortType: ThreadReplySort = .ascending
+        onlyAuthor: Bool = false
     ) async throws -> ThreadPage {
         try await threadPage(
             account: account,
@@ -154,8 +151,8 @@ extension TiebaAPIService {
             page: page,
             forumID: forumID,
             postID: postID,
-            seeLz: seeLz,
-            sortType: sortType
+            seeLz: onlyAuthor,
+            sortType: .ascending
         )
     }
 
@@ -164,8 +161,7 @@ extension TiebaAPIService {
         threadID: Int64,
         postID: UInt64,
         forumID: Int64,
-        page: Int,
-        subpostID: UInt64 = 0
+        page: Int
     ) async throws -> [Subpost] {
         try await subposts(
             account: account,
@@ -173,7 +169,7 @@ extension TiebaAPIService {
             postID: postID,
             forumID: forumID,
             page: page,
-            subpostID: subpostID
+            subpostID: 0
         )
     }
 }

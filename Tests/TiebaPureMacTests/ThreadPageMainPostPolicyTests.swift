@@ -9,8 +9,7 @@ final class ThreadPageMainPostPolicyTests: XCTestCase {
             let page = makePage(mainPost: nil, posts: [reply], currentPage: pageNumber)
             let merged = ThreadPageMainPostPolicy.merging(
                 page,
-                previousMainPost: main,
-                requestedPage: pageNumber
+                previousMainPost: main
             )
 
             XCTAssertEqual(merged.mainPost, main, "Page \(pageNumber)")
@@ -29,8 +28,7 @@ final class ThreadPageMainPostPolicyTests: XCTestCase {
         let merged = ThreadPageMainPostPolicy.merging(
             page,
             previousMainPost: main,
-            previousMainPostIsSummaryFallback: true,
-            requestedPage: 1
+            previousMainPostIsSummaryFallback: true
         )
 
         XCTAssertEqual(merged.mainPost, main)

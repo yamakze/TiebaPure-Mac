@@ -114,6 +114,55 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertNil(remainingData)
     }
 
+    func testInvalidCredentialCleanupFailurePreservesItsCause() async {
+        let store = AccountStore(service: UnclearableAccountStoreService())
+        do {
+            _ = try await store.load()
+            XCTFail("Expected invalid credential cleanup to fail")
+        } catch AccountStoreError.invalidCredentialCleanupFailed(let cause) {
+            XCTAssertEqual(cause.domain, NSURLErrorDomain)
+            XCTAssertEqual(cause.code, URLError.cannotWriteToFile.rawValue)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testUnexpectedKeychainItemCannotBeTreatedAsNoAccount() async {
+        let service = KeychainAccountStoreService(
+            securityOperations: KeychainCopyOperations(status: errSecSuccess, attributes: [:])
+        )
+        do {
+            _ = try await service.loadData()
+            XCTFail("Expected a non-data keychain item to be rejected")
+        } catch {
+            XCTAssertEqual(error as? KeychainError, .invalidItemAttributes)
+        }
+    }
+
+    @MainActor
+    func testSharedSessionOnlyCommitsOneOfTwoLoginAttempts() async throws {
+        let storage = SuspendedSaveAccountStoreService()
+        let store = AccountStore(service: storage)
+        let session = MacSession(api: FixtureTiebaAPI(), accountStore: store, artifactCleaner: ScreenshotSessionCleaner())
+        let cookies = BaiduCookies(bduss: "bduss", stoken: "stoken", baiduID: nil)
+        let first = Task { try await session.signIn(cookies: cookies) }
+        await storage.waitForSave()
+        let second = Task { try await session.signIn(cookies: cookies) }
+        await storage.completeSave()
+        try await first.value
+        do {
+            try await second.value
+            XCTFail("A second login window must not replace the signed-in session")
+        } catch ReaderSessionError.signInInProgress {
+        } catch ReaderSessionError.alreadySignedIn {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertEqual(session.account, FixtureTiebaAPI.account)
+        let savedAccount = try await store.load()
+        XCTAssertEqual(savedAccount, session.account)
+    }
+
     func testLoginValidationRejectsUnsafeCookieBeforeNetworkRequest() async throws {
         let api = makeAPI { _ in
             XCTFail("Unsafe cookies must be rejected before starting a request")
@@ -668,67 +717,47 @@ private final class AuthMockURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-private actor UnavailableAccountStoreService: AccountStoreService {
-    func loadData() async throws -> Data? {
-        throw UnavailableAccountStoreError.unavailable
-    }
-
-    func saveData(_ data: Data) async throws {
-        throw UnavailableAccountStoreError.unavailable
-    }
-
-    func clearData() async throws {
-        throw UnavailableAccountStoreError.unavailable
-    }
+private struct UnclearableAccountStoreService: AccountStoreService {
+    func loadData() async throws -> Data? { Data([0]) }
+    func saveData(_ data: Data) async throws { throw URLError(.cannotWriteToFile) }
+    func clearData() async throws { throw URLError(.cannotWriteToFile) }
 }
 
-private enum UnavailableAccountStoreError: Error {
-    case unavailable
-}
-
-private actor RecordingAccountStoreService: AccountStoreService {
-    struct State: Sendable {
-        var data: Data?
-        var loadCount: Int
-        var saveCount: Int
-        var clearCount: Int
-    }
-
+private actor SuspendedSaveAccountStoreService: AccountStoreService {
     private var data: Data?
-    private var loadCount = 0
-    private var saveCount = 0
-    private var clearCount = 0
+    private var onSave: CheckedContinuation<Void, Never>?
+    private var canFinishSave: CheckedContinuation<Void, Never>?
+    private var didStartSaving = false
 
-    init(data: Data? = nil) {
-        self.data = data
-    }
-
-    func loadData() async throws -> Data? {
-        loadCount += 1
-        return data
-    }
+    func loadData() async throws -> Data? { data }
 
     func saveData(_ data: Data) async throws {
-        saveCount += 1
+        if !didStartSaving {
+            await withCheckedContinuation { continuation in
+                canFinishSave = continuation
+                didStartSaving = true
+                onSave?.resume()
+                onSave = nil
+            }
+        }
         self.data = data
     }
 
-    func clearData() async throws {
-        clearCount += 1
-        data = nil
+    func clearData() async throws { data = nil }
+
+    func waitForSave() async {
+        if !didStartSaving {
+            await withCheckedContinuation { onSave = $0 }
+        }
     }
 
-    func state() -> State {
-        State(
-            data: data,
-            loadCount: loadCount,
-            saveCount: saveCount,
-            clearCount: clearCount
-        )
+    func completeSave() {
+        canFinishSave?.resume()
+        canFinishSave = nil
     }
 }
 
-private final class KeychainCreationStateOperations: KeychainSecurityOperating, @unchecked Sendable {
+private final class KeychainCopyOperations: KeychainSecurityOperating, @unchecked Sendable {
     private let status: OSStatus
     private let attributes: [String: Any]?
 

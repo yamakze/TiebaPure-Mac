@@ -121,22 +121,24 @@ RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests
 
 ```
 Sources/TiebaPureMac/
-├── App/                # 场景配置、主窗口、阅读器布局、设置视图与更新协调
-├── Domain/             # 贴吧核心业务模型、内容过滤规则与协议映射
-├── Infrastructure/     # 网络通信客户端、Protobuf 序列化、Keychain 认证、本地存储与状态协调器
-└── DebugSupport/       # 离线开发数据桩与截图用例支持
+├── App/                # macOS 场景、账号界面、阅读器与媒体视图
+├── Application/        # 会话与写入协调
+├── Domain/             # 业务模型与内容过滤
+├── Infrastructure/     # 贴吧 API、协议映射、Keychain 与本地存储
+└── DebugSupport/       # 离线数据桩与截图用例
 ```
 
 ```mermaid
 graph TD
-    App[App & Views] --> Domain[Domain Models]
+    App[App & Views] --> Application[Session & Coordinators]
+    App --> Domain[Domain Models]
     App --> Infra[Infrastructure]
-    Domain --> Mappers[Domain Mappers]
-    Infra --> Network[Network & TiebaAPI]
-    Infra --> Auth[Auth & Keychain]
-    Infra --> Persistence[Local Storage]
-    Infra --> Protobuf[Protobuf Schemas]
-    Network --> Protobuf
+    Application --> Domain
+    Application --> Infra
+    Infra --> Network[Network & Protocol Mapping]
+    Infra --> Persistence[Keychain & Local Storage]
+    Network --> Domain
+    Network --> Protobuf[Protobuf]
 ```
 
 ## 文档索引

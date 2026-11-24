@@ -121,22 +121,24 @@ RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests
 
 ```
 Sources/TiebaPureMac/
-├── App/                # App entry, window scenes, reader view, settings, and updates
-├── Domain/             # Core business models, content filtering, and protocol mapping
-├── Infrastructure/     # HTTP client, Protobuf models, Keychain auth, local storage, and coordinators
+├── App/                # macOS scenes, account screens, reader, and media views
+├── Application/        # Account session and write coordination
+├── Domain/             # Business models and content filtering
+├── Infrastructure/     # Tieba API, protocol mapping, Keychain, and local storage
 └── DebugSupport/       # Offline development fixtures and screenshot runner support
 ```
 
 ```mermaid
 graph TD
-    App[App & Views] --> Domain[Domain Models]
+    App[App & Views] --> Application[Session & Coordinators]
+    App --> Domain[Domain Models]
     App --> Infra[Infrastructure]
-    Domain --> Mappers[Domain Mappers]
-    Infra --> Network[Network & TiebaAPI]
-    Infra --> Auth[Auth & Keychain]
-    Infra --> Persistence[Local Storage]
-    Infra --> Protobuf[Protobuf Schemas]
-    Network --> Protobuf
+    Application --> Domain
+    Application --> Infra
+    Infra --> Network[Network & Protocol Mapping]
+    Infra --> Persistence[Keychain & Local Storage]
+    Network --> Domain
+    Network --> Protobuf[Protobuf]
 ```
 
 ## Documentation
