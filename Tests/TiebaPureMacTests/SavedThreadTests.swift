@@ -97,6 +97,14 @@ final class SavedThreadTests: XCTestCase {
         )
         try store.save(original, preparedMedia: originalPrepared)
 
+        let mediaDirectory = savedThreadMediaRoot(in: directory)
+            .appendingPathComponent(String(original.id), isDirectory: true)
+        let mediaFile = mediaDirectory.appendingPathComponent(originalAsset.fileName)
+        let directoryAttributes = try FileManager.default.attributesOfItem(atPath: mediaDirectory.path)
+        let fileAttributes = try FileManager.default.attributesOfItem(atPath: mediaFile.path)
+        XCTAssertEqual((directoryAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+        XCTAssertEqual((fileAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+
         XCTAssertEqual(
             try store.mediaStore.backupFiles(for: original)[originalAsset.fileName],
             originalData

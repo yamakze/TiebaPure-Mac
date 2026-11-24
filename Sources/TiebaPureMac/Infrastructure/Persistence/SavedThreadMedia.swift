@@ -233,10 +233,12 @@ final class SavedThreadMediaStore: @unchecked Sendable {
 
     private let fileManager: FileManager
     private let rootURL: URL?
+    private let supportsFileProtection: Bool
 
     private init() {
         fileManager = .default
         rootURL = nil
+        supportsFileProtection = false
     }
 
     init(
@@ -251,9 +253,17 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             "saved-thread-media",
             isDirectory: true
         )
-        try Self.prepareProtectedDirectory(root, fileManager: fileManager)
+        // File protection depends on the destination volume, including in macOS VMs.
+        let volume = try location.directoryURL.resourceValues(forKeys: [.volumeSupportsFileProtectionKey])
+        let supportsFileProtection = volume.allValues[.volumeSupportsFileProtectionKey] as? Bool == true
+        try Self.prepareProtectedDirectory(
+            root,
+            fileManager: fileManager,
+            supportsFileProtection: supportsFileProtection
+        )
         self.fileManager = fileManager
         rootURL = root
+        self.supportsFileProtection = supportsFileProtection
         SavedThreadMediaAuthorization.shared.register(rootURL: root)
     }
 
@@ -595,7 +605,7 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             let destination = directoryURL.appendingPathComponent(fileName, isDirectory: false)
             if fileManager.fileExists(atPath: destination.path) == false {
                 try fileManager.copyItem(at: lease.fileURL, to: destination)
-                try Self.secureFile(destination, fileManager: fileManager)
+                try secureFile(destination)
             }
             return SavedThreadMediaAsset(
                 sourceIdentities: request.sourceIdentities,
@@ -809,7 +819,11 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             ".staging-\(threadID)-\(UUID().uuidString)",
             isDirectory: true
         )
-        try Self.prepareProtectedDirectory(url, fileManager: fileManager)
+        try Self.prepareProtectedDirectory(
+            url,
+            fileManager: fileManager,
+            supportsFileProtection: supportsFileProtection
+        )
         return url
     }
 
@@ -830,8 +844,9 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             throw SavedThreadError.invalidBackup
         }
         let url = directory.appendingPathComponent(name, isDirectory: false)
-        try data.write(to: url, options: [.atomic, .completeFileProtection])
-        try Self.secureFile(url, fileManager: fileManager)
+        let options: Data.WritingOptions = supportsFileProtection ? [.atomic, .completeFileProtection] : .atomic
+        try data.write(to: url, options: options)
+        try secureFile(url)
     }
 
     private static func voiceIdentity(md5: String) -> String { "voice:\(md5)" }
@@ -884,7 +899,8 @@ final class SavedThreadMediaStore: @unchecked Sendable {
 
     private static func prepareProtectedDirectory(
         _ url: URL,
-        fileManager: FileManager
+        fileManager: FileManager,
+        supportsFileProtection: Bool
     ) throws {
         if fileManager.fileExists(atPath: url.path) {
             let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
@@ -895,22 +911,30 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             try fileManager.createDirectory(
                 at: url,
                 withIntermediateDirectories: false,
-                attributes: [
-                    .posixPermissions: NSNumber(value: Int16(0o700)),
-                    .protectionKey: FileProtectionType.complete
-                ]
+                attributes: protectedAttributes(permissions: 0o700, supportsFileProtection: supportsFileProtection)
             )
         }
     }
 
-    private static func secureFile(_ url: URL, fileManager: FileManager) throws {
+    private func secureFile(_ url: URL) throws {
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard values.isRegularFile == true, values.isSymbolicLink != true else {
             throw SavedThreadError.invalidMediaManifest
         }
-        try fileManager.setAttributes([
-            .posixPermissions: NSNumber(value: Int16(0o600)),
-            .protectionKey: FileProtectionType.complete
-        ], ofItemAtPath: url.path)
+        try fileManager.setAttributes(
+            Self.protectedAttributes(permissions: 0o600, supportsFileProtection: supportsFileProtection),
+            ofItemAtPath: url.path
+        )
+    }
+
+    private static func protectedAttributes(
+        permissions: Int16,
+        supportsFileProtection: Bool
+    ) -> [FileAttributeKey: Any] {
+        var attributes: [FileAttributeKey: Any] = [.posixPermissions: NSNumber(value: permissions)]
+        if supportsFileProtection {
+            attributes[.protectionKey] = FileProtectionType.complete
+        }
+        return attributes
     }
 }
