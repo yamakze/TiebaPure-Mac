@@ -152,10 +152,27 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(forum.waitForExistence(timeout: 10))
         capture("16-followed-forums")
         forum.click()
-        chooseViewOption("发帖时间排序", in: "吧内主题排序")
+        let unfollow = app.toolbars.buttons["forum-unfollow"].firstMatch
+        let follow = app.toolbars.buttons["forum-follow"].firstMatch
+        XCTAssertTrue(unfollow.waitForExistence(timeout: 10))
+        unfollow.click()
+        XCTAssertTrue(follow.waitForExistence(timeout: 10))
+        followed.click()
+        XCTAssertTrue(app.buttons["followed-forum-102"].waitForExistence(timeout: 10))
+        XCTAssertFalse(forum.exists)
+        app.typeKey("2", modifierFlags: .command)
+        app.buttons["测试吧"].firstMatch.click()
+        XCTAssertTrue(follow.waitForExistence(timeout: 10))
+        follow.click()
+        XCTAssertTrue(unfollow.waitForExistence(timeout: 10))
+        followed.click()
+        XCTAssertTrue(forum.waitForExistence(timeout: 10))
+        forum.click()
+
+        app.typeKey("2", modifierFlags: [.command, .option])
         let publishSorted = app.descendants(matching: .any)["thread-8003-0"].firstMatch
         XCTAssertTrue(publishSorted.waitForExistence(timeout: 10))
-        chooseViewOption("只看精华", in: "吧内主题排序")
+        app.typeKey("3", modifierFlags: [.command, .option])
         let featured = app.descendants(matching: .any)["thread-8001-0"].firstMatch
         XCTAssertTrue(featured.waitForExistence(timeout: 10))
         capture("14-forum-featured")
@@ -166,7 +183,7 @@ final class ScreenshotTests: XCTestCase {
         app.typeKey("f", modifierFlags: .command)
         app.typeText("Swift\r")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1003-2002"].firstMatch.waitForExistence(timeout: 10))
-        chooseViewOption("相关", in: "搜索结果排序")
+        app.typeKey("2", modifierFlags: [.command, .option])
         XCTAssertTrue(app.descendants(matching: .any)["thread-1004-2002"].firstMatch.waitForExistence(timeout: 10))
         XCTAssertFalse(app.toolbars.descendants(matching: .any)["search-order"].exists)
         capture("15-forum-search")
@@ -180,6 +197,8 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["最近访问"].waitForExistence(timeout: 10))
 
         app.typeKey("3", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts["历史搜索词"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Swift"].exists)
         app.typeKey("f", modifierFlags: .command)
         app.typeText("Swift\r")
         XCTAssertTrue(app.descendants(matching: .any)["thread-1002-2002"].firstMatch.waitForExistence(timeout: 10))
@@ -202,6 +221,20 @@ final class ScreenshotTests: XCTestCase {
         capture("18-thread-author")
         onlyAuthor.click()
         XCTAssertTrue(app.staticTexts["确定性回复内容"].waitForExistence(timeout: 10))
+
+        let unfavorite = app.toolbars.buttons["thread-unfavorite"].firstMatch
+        let favorite = app.toolbars.buttons["thread-favorite"].firstMatch
+        XCTAssertTrue(unfavorite.waitForExistence(timeout: 10))
+        unfavorite.click()
+        XCTAssertTrue(favorite.waitForExistence(timeout: 10))
+        app.typeKey("[", modifierFlags: .command)
+        XCTAssertTrue(app.staticTexts["暂无收藏"].waitForExistence(timeout: 10))
+        app.typeKey("]", modifierFlags: .command)
+        XCTAssertTrue(favorite.waitForExistence(timeout: 10))
+        favorite.click()
+        XCTAssertTrue(unfavorite.waitForExistence(timeout: 10))
+        app.typeKey("[", modifierFlags: .command)
+        XCTAssertTrue(marked.waitForExistence(timeout: 10))
 
         let account = app.descendants(matching: .any)["account-menu"].firstMatch
         account.click()

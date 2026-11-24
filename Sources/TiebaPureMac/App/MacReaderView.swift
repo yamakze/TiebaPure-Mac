@@ -111,6 +111,13 @@ struct MacReaderView: View {
                                 .help("返回进吧")
                                 .accessibilityIdentifier("back-to-forum-entry")
                         }
+                        if let forum, let account = session.account {
+                            ToolbarItem(placement: .primaryAction) {
+                                MacForumFollowButton(forum: forum, account: account)
+                                    .id(account.sessionIdentity)
+                                    .id(forum.name)
+                            }
+                        }
                     }
                 }
                 .navigationDestination(for: MacThreadDestination.self) { destination in
@@ -185,10 +192,18 @@ struct MacReaderView: View {
                 let forums = try await session.api.followedForums(account: account)
                 try Task.checkCancellation()
                 guard account.sessionIdentity == session.account?.sessionIdentity else { return }
-                followed.accept(forums, nextPage: nil, for: request)
+                let reconciled = session.relationships.reconciledFollowedForums(accountID: account.id, loaded: forums)
+                session.relationships.seedFollowedForums(accountID: account.id, forums: reconciled)
+                followed.accept(reconciled, nextPage: nil, for: request)
             } catch {
                 if !Task.isCancelled { followed.fail(error, for: request) }
             }
+        }
+        .onReceive(session.relationships.forumFollowDidChange) { change in
+            if section == .followedForums, change.accountID == session.account?.id { followed.reload(clear: true) }
+        }
+        .onReceive(session.favoriteDidChange) { change in
+            if section == .favorites, change.session == session.account?.sessionIdentity { pages.reload(clear: true) }
         }
         .onAppear {
             if section == .home && pages.items.isEmpty && pages.request == nil && pages.error == nil {
@@ -462,7 +477,7 @@ struct MacReaderView: View {
         searchPresented = false
         forwardDestination = nil
         historyError = nil
-        if !searchHistory.record(value) {
+        if section == .search && !searchHistory.record(value) {
             historyError = "无法保存搜索历史。"
         }
         pages.reload(clear: true)
@@ -515,6 +530,8 @@ struct MacReaderView: View {
                 next = incoming.isEmpty ? nil : page + 1
             case (.favorites, _):
                 guard let account else { return }
+                await session.waitForFavoriteWrites(account: account)
+                try Task.checkCancellation()
                 let result = try await session.api.accountThreadFavorites(account: account, page: page)
                 incoming = result.favorites.map { favorite in
                     let thread = ThreadSummary(
@@ -542,6 +559,65 @@ struct MacReaderView: View {
         } catch {
             guard !Task.isCancelled else { return }
             pages.fail(error, for: request)
+        }
+    }
+}
+
+private struct MacForumFollowButton: View {
+    @EnvironmentObject private var session: MacSession
+    let forum: Forum
+    let account: Account
+
+    @State private var isFollowed: Bool?
+    @State private var readError: String?
+    @State private var readRequest = UUID()
+    @State private var isWriting = false
+
+    var body: some View {
+        Group {
+            if let isFollowed {
+                Button(isFollowed ? "已关注" : "关注") {
+                    isWriting = true
+                    Task {
+                        defer { isWriting = false }
+                        do {
+                            try await session.setForumFollowed(forum, account: account, followed: !isFollowed)
+                            try Task.checkCancellation()
+                            if account.sessionIdentity == session.account?.sessionIdentity { self.isFollowed = !isFollowed }
+                        } catch is CancellationError {
+                        } catch {
+                            if account.sessionIdentity == session.account?.sessionIdentity {
+                                session.errorMessage = ReaderErrorMessage.message(for: error)
+                            }
+                        }
+                    }
+                }
+                .disabled(isWriting || session.isLoggingOut)
+                .help(isFollowed ? "取消关注" : "关注贴吧")
+                .accessibilityIdentifier(isFollowed ? "forum-unfollow" : "forum-follow")
+            } else if let readError {
+                Button("重试关注状态") { readRequest = UUID() }.help(readError)
+            } else {
+                ProgressView().controlSize(.small).accessibilityLabel("载入关注状态")
+            }
+        }
+        .task(id: readRequest) {
+            readError = nil
+            do {
+                let membership = try await session.api.forumMembership(account: account, forum: forum)
+                try Task.checkCancellation()
+                guard account.sessionIdentity == session.account?.sessionIdentity else { return }
+                isFollowed = session.relationships.forumFollowOverride(accountID: account.id, forum: forum) ?? membership.isFollowed
+                session.relationships.seedForumFollow(accountID: account.id, forum: forum, isFollowed: membership.isFollowed)
+            } catch {
+                if !Task.isCancelled { readError = ReaderErrorMessage.message(for: error) }
+            }
+        }
+        .onReceive(session.relationships.forumFollowDidChange) { change in
+            if change.accountID == account.id,
+               let confirmed = session.relationships.forumFollowOverride(accountID: account.id, forum: forum) {
+                isFollowed = confirmed
+            }
         }
     }
 }

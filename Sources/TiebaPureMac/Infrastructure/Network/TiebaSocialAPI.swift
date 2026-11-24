@@ -576,7 +576,10 @@ extension TiebaAPI {
             as: TiebaMutationResponseDTO.self
         )
         try TiebaResponseValidator.validate(code: response.errorCode, message: response.errorMessage)
-        return ForumMembership(forumID: forumID, isFollowed: followed)
+        try Task.checkCancellation()
+        var resolvedForum = forum
+        resolvedForum.id = forumID
+        return try await forumMembership(account: account, forum: resolvedForum)
     }
 
     private func resolvedForumID(for forum: Forum) async throws -> Int64 {

@@ -11,6 +11,8 @@ struct MacThreadView: View {
     @State private var selectedPost: Post?
     @State private var onlyAuthor = false
     @State private var targetPostID: UInt64?
+    @State private var isFavorite: Bool?
+    @State private var isUpdatingFavorite = false
 
     init(thread: ThreadSummary, initialPostID: UInt64?, reloadID: UUID) {
         self.thread = thread
@@ -96,6 +98,28 @@ struct MacThreadView: View {
                 .toggleStyle(.button)
                 .help("只看楼主")
                 .accessibilityIdentifier("only-thread-author")
+            if let account = session.account, let isFavorite, let main = pages.items.first {
+                Button(isFavorite ? "取消收藏" : "收藏", systemImage: isFavorite ? "bookmark.fill" : "bookmark") {
+                    isUpdatingFavorite = true
+                    Task {
+                        defer { isUpdatingFavorite = false }
+                        do {
+                            try await session.setThreadFavorite(
+                                account: account, threadID: thread.id, forumID: forumID ?? thread.forumID,
+                                postID: targetPostID ?? main.id, isFavorite: !isFavorite
+                            )
+                        } catch is CancellationError {
+                        } catch {
+                            if account.sessionIdentity == session.account?.sessionIdentity {
+                                session.errorMessage = ReaderErrorMessage.message(for: error)
+                            }
+                        }
+                    }
+                }
+                .help(isFavorite ? "取消收藏" : "收藏")
+                .disabled(isUpdatingFavorite || session.isLoggingOut)
+                .accessibilityIdentifier(isFavorite ? "thread-unfavorite" : "thread-favorite")
+            }
             if let url = URL(string: "https://tieba.baidu.com/p/\(thread.id)") {
                 ShareLink(item: url)
             }
@@ -118,6 +142,11 @@ struct MacThreadView: View {
         .task(id: pages.request) { [request = pages.request] in
             if let request { await loadPage(request) }
         }
+        .onReceive(session.favoriteDidChange) { change in
+            if change.session == session.account?.sessionIdentity && change.threadID == thread.id {
+                isFavorite = change.isFavorite
+            }
+        }
     }
 
     @MainActor
@@ -127,6 +156,10 @@ struct MacThreadView: View {
         let onlyAuthor = onlyAuthor
         let account = session.account
         do {
+            if request.replacesItems, let account {
+                await session.waitForFavoriteWrite(account: account, threadID: thread.id)
+                try Task.checkCancellation()
+            }
             let incoming = try await session.api.threadPage(
                 account: account, threadID: thread.id, page: requestedPage,
                 forumID: forumID ?? thread.forumID, postID: request.replacesItems && !onlyAuthor ? targetPostID : nil,
@@ -149,6 +182,7 @@ struct MacThreadView: View {
             guard pages.request == request, account?.sessionIdentity == session.account?.sessionIdentity else { return }
             header = incoming.thread
             forumID = incoming.forum.id
+            if request.replacesItems { isFavorite = incoming.isCollected }
             pages.accept(posts, nextPage: incoming.hasMore ? max(requestedPage, incoming.currentPage) + 1 : nil, for: request)
         } catch {
             if !Task.isCancelled { pages.fail(error, for: request) }

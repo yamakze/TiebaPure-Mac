@@ -70,27 +70,28 @@ struct MacReaderCommands: Commands {
             Divider()
             if let sort = actions?.searchSort {
                 Menu("搜索结果排序") {
-                    Picker("搜索结果排序", selection: sort) {
-                        ForEach(ReaderSearchSort.allCases, id: \.self) { option in
-                            Text(option.title).tag(option)
+                    ForEach(ReaderSearchSort.allCases, id: \.self) { option in
+                        Button { sort.wrappedValue = option } label: {
+                            if sort.wrappedValue == option { Label(option.title, systemImage: "checkmark") }
+                            else { Text(option.title) }
                         }
+                        .keyboardShortcut(option == .latest ? "1" : "2", modifiers: [.command, .option])
                     }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
                 }
             }
             if let sort = actions?.forumSort, let onlyFeatured = actions?.onlyFeatured {
                 Menu("吧内主题排序") {
-                    Picker("吧内主题排序", selection: sort) {
-                        ForEach(ForumThreadCategory.latestSortOptions) { option in
-                            Text(option.sortOptionTitle).tag(option)
+                    ForEach(ForumThreadCategory.latestSortOptions) { option in
+                        Button { sort.wrappedValue = option } label: {
+                            if sort.wrappedValue == option { Label(option.sortOptionTitle, systemImage: "checkmark") }
+                            else { Text(option.sortOptionTitle) }
                         }
+                        .disabled(onlyFeatured.wrappedValue)
+                        .keyboardShortcut(option == .replyTime ? "1" : "2", modifiers: [.command, .option])
                     }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                    .disabled(onlyFeatured.wrappedValue)
                     Divider()
                     Toggle("只看精华", isOn: onlyFeatured)
+                        .keyboardShortcut("3", modifiers: [.command, .option])
                 }
             }
             Menu("外观") {

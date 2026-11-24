@@ -40,10 +40,11 @@ It preserves full upstream Git history and original author attributions while re
 ## Features
 
 - 🧭 **Desktop Navigation** — Unified sidebar with Home Recommendations, Forum Directory, Search, Followed Forums, and Bookmarks. Supports hierarchical navigation stacks and history traversing.
-- 📖 **Seamless Reading Experience** — Continuous floor scrolling with author-only and reverse-order sorting options. Native right-hand Inspector drawer for subpost discussion threads.
-- 🔍 **Two-Tier Search** — Site-wide forum search and in-forum keyword search. Automatically persists recent forums and query history locally.
+- 📖 **Seamless Reading Experience** — Continuous floor scrolling, author-only reading, and a native Inspector for subpost discussions.
+- 🔍 **Two-Tier Search** — Site-wide and in-forum keyword search. Recent forums and site-wide search history are saved locally.
+- ⭐ **Account Library** — Follow or unfollow a forum and bookmark or remove a thread. The app reads back changes before updating the sidebar.
 - 🔐 **Isolated Login & Secure Storage** — Official authentication inside isolated WebKit containers. Session credentials are encrypted directly in the macOS Keychain with proactive expiration detection.
-- 🖼️ **Native Media Rendering** — Displays built-in Tieba emoticons and high-resolution post images with zoom previews. Safely opens voice and video links externally.
+- 🖼️ **Native Media Rendering** — Displays built-in Tieba emoticons and post images, and opens voice and video links externally.
 - ⌨️ **Keyboard-Driven Shortcuts** — Complete keyboard shortcuts for section switching, search focus, content refreshing, and history navigation.
 - 🔄 **Automatic Updates** — Integrated Sparkle 2 framework for Ed25519 signature-verified updates directly from GitHub Releases.
 - 🎨 **Adaptive macOS Appearance** — Fluid support for Light and Dark system appearances following Apple Human Interface Guidelines.
@@ -58,6 +59,8 @@ It preserves full upstream Git history and original author attributions while re
 | `Esc` | Clear search query or exit input focus |
 | `⌘R` | Refresh current page, forum, or thread |
 | `⌘[` / `⌘]` | Navigate Back / Forward in history |
+| `⌥⌘1` / `⌥⌘2` | Latest / Relevant for search results, or reply time / publication time for forum topics |
+| `⌥⌘3` | Toggle featured topics in the forum |
 
 ## Installation
 
@@ -81,11 +84,7 @@ brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
 
 Download the latest `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases/latest), unpack it, and drag `TiebaPure-Mac.app` into your **Applications** folder.
 
-> [!NOTE]
-> If macOS alerts that the app cannot be opened or is damaged, remove the quarantine flag in Terminal:
-> ```bash
-> xattr -cr /Applications/TiebaPure-Mac.app
-> ```
+If macOS rejects the download, compare the ZIP with `SHA256SUMS.txt` from the same release and download it again if the hash differs.
 
 ## Building
 

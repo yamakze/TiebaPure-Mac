@@ -504,6 +504,30 @@ final class UserProfileTests: XCTestCase {
         XCTAssertEqual(requestedPaths, ["/c/s/login", "/c/c/forum/like"])
     }
 
+    func testForumFollowReadsMembershipAfterAcceptedWrite() async throws {
+        var paths: [String] = []
+        let api = makeSocialAPI { request in
+            let path = try XCTUnwrap(request.url?.path)
+            paths.append(path)
+            switch path {
+            case "/c/s/login":
+                return Data(#"{"error_code":0,"anti":{"tbs":"fresh-forum-tbs"}}"#.utf8)
+            case "/c/c/forum/like":
+                return Data(#"{"error_code":0}"#.utf8)
+            case "/c/f/forum/getUserForumLevelInfo":
+                return Data(#"{"error_code":0,"data":{"user_forum_info":{"is_follow":"0"}}}"#.utf8)
+            default:
+                XCTFail("Unexpected path: \(path)")
+                return Data()
+            }
+        }
+
+        let membership = try await api.setForumFollowed(account: makeAccount(), forum: makeForum(), followed: true)
+
+        XCTAssertFalse(membership.isFollowed)
+        XCTAssertEqual(paths, ["/c/s/login", "/c/c/forum/like", "/c/f/forum/getUserForumLevelInfo"])
+    }
+
     func testFollowMutationFetchesFreshTBSBeforeSubmitting() async throws {
         var mutationCount = 0
         let api = makeSocialAPI { request in
