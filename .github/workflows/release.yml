@@ -2,11 +2,11 @@ name: macOS Release
 
 on:
   push:
-    tags: ['mac-v*']
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag (for example mac-v0.1.0)
+        description: Existing version tag (for example v0.1.0)
         required: true
         type: string
 
@@ -35,7 +35,7 @@ jobs:
       - name: Check tag and run tests
         run: |
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
-          if [[ "$RELEASE_TAG" != "mac-v$version" ]]; then
+          if [[ "$RELEASE_TAG" != "v$version" ]]; then
             echo 'The release tag must match the version in Resources/Info.plist.' >&2
             exit 1
           fi
@@ -116,7 +116,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           sha256sum -c SHA256SUMS.txt
-          version=${RELEASE_TAG#mac-v}
+          version=${RELEASE_TAG#v}
           python3 - <<'PY'
           from pathlib import Path
           notes = Path('RELEASE_NOTES.md').read_text()

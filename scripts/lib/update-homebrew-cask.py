@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("tag", help="Release tag, for example mac-v0.1.0")
+parser.add_argument("tag", help="Release tag, for example v0.1.0")
 parser.add_argument("archive", type=Path, help="Downloaded TiebaPure-Mac-<version>.zip")
 parser.add_argument(
     "--output",
@@ -17,9 +17,9 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-match = re.fullmatch(r"mac-v([0-9]+\.[0-9]+\.[0-9]+)", args.tag)
+match = re.fullmatch(r"v([0-9]+\.[0-9]+\.[0-9]+)", args.tag)
 if not match:
-    parser.error("Expected semantic release tag, for example mac-v0.1.0")
+    parser.error("Expected semantic release tag, for example v0.1.0")
 version = match.group(1)
 
 if args.archive.name != f"TiebaPure-Mac-{version}.zip":
@@ -47,7 +47,7 @@ cask "tiebapure-mac" do
   version "{version}"
   sha256 "{digest.hexdigest()}"
 
-  url "https://github.com/yamakze/TiebaPure-Mac/releases/download/mac-v#{{version}}/TiebaPure-Mac-#{{version}}.zip"
+  url "https://github.com/yamakze/TiebaPure-Mac/releases/download/v#{{version}}/TiebaPure-Mac-#{{version}}.zip"
   name "TiebaPure-Mac"
   desc "Native macOS client for Baidu Tieba"
   homepage "https://github.com/yamakze/TiebaPure-Mac"

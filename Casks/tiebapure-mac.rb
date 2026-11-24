@@ -2,7 +2,7 @@ cask "tiebapure-mac" do
   version "0.1.0"
   sha256 :no_check
 
-  url "https://github.com/yamakze/TiebaPure-Mac/releases/download/mac-v#{version}/TiebaPure-Mac-#{version}.zip"
+  url "https://github.com/yamakze/TiebaPure-Mac/releases/download/v#{version}/TiebaPure-Mac-#{version}.zip"
   name "TiebaPure-Mac"
   desc "Native macOS client for Baidu Tieba"
   homepage "https://github.com/yamakze/TiebaPure-Mac"

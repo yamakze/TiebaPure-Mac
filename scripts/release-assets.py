@@ -11,11 +11,11 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-if len(sys.argv) != 3 or not re.fullmatch(r"mac-v\d+\.\d+\.\d+", sys.argv[1]):
-    raise SystemExit("Usage: scripts/release-assets.py mac-vX.Y.Z <app bundle>")
+if len(sys.argv) != 3 or not re.fullmatch(r"v\d+\.\d+\.\d+", sys.argv[1]):
+    raise SystemExit("Usage: scripts/release-assets.py vX.Y.Z <app bundle>")
 
 tag, app = sys.argv[1], Path(sys.argv[2]).resolve()
-version = tag.removeprefix("mac-v")
+version = tag.removeprefix("v")
 root = Path(__file__).resolve().parents[1]
 info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
 if info["CFBundleShortVersionString"] != version:
