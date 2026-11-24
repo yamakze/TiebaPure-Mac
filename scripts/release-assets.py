@@ -26,13 +26,7 @@ private_key = os.environ.pop("SPARKLE_PRIVATE_KEY", "").strip()
 if not private_key:
     raise SystemExit("SPARKLE_PRIVATE_KEY is required")
 
-changelog = (root / "CHANGELOG.md").read_text()
-notes = re.search(
-    rf"^## {re.escape(version)}(?: — [^\n]+)?\n(.*?)(?=^## |\Z)",
-    changelog, re.MULTILINE | re.DOTALL,
-)
-if not notes or not notes[1].strip():
-    raise SystemExit(f"Missing release notes for {version} in CHANGELOG.md")
+notes = subprocess.check_output([root / "scripts/release-notes.sh", tag], text=True)
 
 tools = root / ".build/artifacts/sparkle/Sparkle/bin"
 releases = info["SUFeedURL"].removesuffix("/latest/download/appcast.xml")
@@ -44,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix=".release.", dir=output.parent) as direc
     archive = work / f"TiebaPure-Mac-{version}.zip"
     feed = work / "appcast.xml"
     notes_path = archive.with_suffix(".md")
-    notes_path.write_text(notes[1].strip() + "\n")
+    notes_path.write_text(notes)
     subprocess.run(["ditto", "-c", "-k", "--keepParent", app, archive], check=True)
     subprocess.run([
         tools / "generate_appcast", "--ed-key-file", "-", "--embed-release-notes",
@@ -73,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix=".release.", dir=output.parent) as direc
     package_notes = work / "PACKAGE_NOTES.md"
     package_notes.write_text(
         f"## Downloads\n\n"
-        f"- macOS 14+: `TiebaPure-Mac-{version}.zip` ({architectures}; Developer ID signed and notarized).\n"
+        f"- macOS 14+: `TiebaPure-Mac-{version}.zip` ({architectures}).\n"
         f"- `SHA256SUMS.txt`: download integrity checksums.\n"
         f"- `appcast.xml`: Sparkle 2 signed auto-update feed.\n"
     )

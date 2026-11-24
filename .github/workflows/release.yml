@@ -40,6 +40,7 @@ jobs:
             exit 1
           fi
           scripts/verify-project.sh
+          scripts/release-notes.sh "$RELEASE_TAG" >/dev/null
           swift test
       - name: Sign and notarize Universal app
         env:
@@ -58,7 +59,10 @@ jobs:
           : "${APPLE_ID:?Set APPLE_ID}"
           : "${APPLE_TEAM_ID:?Set APPLE_TEAM_ID}"
           : "${APPLE_APP_PASSWORD:?Set APPLE_APP_PASSWORD}"
-          : "${SPARKLE_PUBLIC_KEY:?Set SPARKLE_PUBLIC_KEY}"
+          if [[ -z "$SPARKLE_PUBLIC_KEY" ]] && ! grep -qs '[^[:space:]]' Resources/SparklePublicKey.txt; then
+            echo 'Set SPARKLE_PUBLIC_KEY or commit Resources/SparklePublicKey.txt.' >&2
+            exit 1
+          fi
           work=$(mktemp -d "$RUNNER_TEMP/tiebapure-signing.XXXXXX")
           keychain="$work/release.keychain-db"
           trap 'security delete-keychain "$keychain"; rm -rf "$work"' EXIT

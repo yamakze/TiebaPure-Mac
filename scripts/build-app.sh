@@ -51,16 +51,15 @@ done
 ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework \
     "$APP/Contents/Frameworks/Sparkle.framework"
 
-PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
-if [[ -z "$PUBLIC_KEY" && -f "Resources/SparklePublicKey.txt" ]]; then
-    PUBLIC_KEY="$(tr -d ' \n\r\t' < Resources/SparklePublicKey.txt)"
+PUBLIC_KEY=""
+if [[ "$CONFIGURATION" == release ]]; then
+    PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
+    if [[ -z "$PUBLIC_KEY" && -f "Resources/SparklePublicKey.txt" ]]; then
+        PUBLIC_KEY="$(tr -d ' \n\r\t' < Resources/SparklePublicKey.txt)"
+    fi
 fi
 
 if [[ -n "$PUBLIC_KEY" ]]; then
-    if [[ "$CONFIGURATION" != release ]]; then
-        echo "Sparkle update configuration requires a release build." >&2
-        exit 2
-    fi
     python3 - "$APP/Contents/Info.plist" "$PUBLIC_KEY" <<'PY'
 import base64
 import plistlib
