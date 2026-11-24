@@ -15,7 +15,7 @@
 SwiftUI · AppKit · WebKit Login · SwiftPM · Sparkle Auto-Update
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue?logo=apple)](#building)
-[![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white)](Package.swift)
+[![Swift](https://img.shields.io/badge/Swift-6.2%2B-F05138?logo=swift&logoColor=white)](Package.swift)
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 
 <table>
@@ -57,7 +57,7 @@ It preserves full upstream Git history and original author attributions while re
 - 🔐 **Isolated Login & Secure Storage** — Official authentication inside isolated WebKit containers. Session credentials are encrypted directly in the macOS Keychain with proactive expiration detection.
 - 🖼️ **Native Media Rendering** — Click an image in a post or subpost to preview and zoom it. Voice and video links open externally.
 - ⌨️ **Keyboard-Driven Shortcuts** — Complete keyboard shortcuts for section switching, search focus, content refreshing, and history navigation.
-- 🔄 **Automatic Updates** — Integrated Sparkle 2 framework for Ed25519 signature-verified updates directly from GitHub Releases.
+- 🔄 **Automatic Updates** — Sparkle 2 supports Ed25519-verified updates in builds configured with a signed feed.
 - 🎨 **Adaptive macOS Appearance** — Fluid support for Light and Dark system appearances following Apple Human Interface Guidelines.
 
 ## Keyboard Shortcuts
@@ -78,6 +78,8 @@ It preserves full upstream Git history and original author attributions while re
 
 System requirements: macOS 14+ (Sonoma or later), Apple Silicon and Intel Universal support.
 
+The `v0.1.0` preview is ad-hoc signed and has no Apple notarization. Preview builds are updated manually. macOS may require you to allow the app once in Privacy & Security. [Apple's instructions](https://support.apple.com/en-us/102445)
+
 ### Homebrew
 
 ```bash
@@ -94,13 +96,13 @@ brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
 
 ### Manual Download
 
-Download the latest `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases/latest), unpack it, and drag `TiebaPure-Mac.app` into your **Applications** folder.
+Download `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases), unpack it, and drag `TiebaPure-Mac.app` into your **Applications** folder.
 
 If macOS rejects the download, compare the ZIP with `SHA256SUMS.txt` from the same release and download it again if the hash differs.
 
 ## Building
 
-Requires macOS 14+ and Xcode 15+. Managed via SwiftPM and orchestrated with the root `Makefile`:
+Build with Swift 6.2 or later. CI uses Xcode 26.2. The root `Makefile` wraps SwiftPM and app packaging.
 
 ```bash
 # Build the local macOS app bundle (artifacts/macos/TiebaPure-Mac.app)

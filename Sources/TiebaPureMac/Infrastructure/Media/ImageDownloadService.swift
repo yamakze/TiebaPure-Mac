@@ -296,4 +296,3 @@ enum TiebaImageDownloadPolicy {
         }
     }
 }
-

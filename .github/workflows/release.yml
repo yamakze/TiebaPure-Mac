@@ -22,7 +22,7 @@ env:
 
 jobs:
   build:
-    if: github.repository == 'yamakze/TiebaPure-Mac'
+    if: github.repository == 'yamakze/TiebaPure-Mac' && (github.event_name == 'workflow_dispatch' || vars.MACOS_SIGN_IDENTITY != '')
     runs-on: macos-15
     timeout-minutes: 45
     env:

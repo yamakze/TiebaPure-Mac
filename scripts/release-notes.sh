@@ -5,8 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-RAW_VERSION="${1:?usage: release-notes.sh <version>}"
-VERSION="${RAW_VERSION#mac-v}"
+VERSION="${1:?usage: release-notes.sh <version>}"
 VERSION="${VERSION#v}"
 
 SECTION="$(awk -v ver="$VERSION" '

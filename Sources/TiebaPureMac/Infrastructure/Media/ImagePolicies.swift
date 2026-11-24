@@ -143,4 +143,3 @@ enum TiebaAnimatedImageDecodePolicy {
         return min(max(rawDuration, minimumFrameDuration), maximumFrameDuration)
     }
 }
-

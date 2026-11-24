@@ -326,4 +326,3 @@ enum ContentDraftImageBlobCodec {
         }
     }
 }
-

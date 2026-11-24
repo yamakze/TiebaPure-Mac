@@ -405,4 +405,3 @@ final class ContentDraftRecord {
         self.updatedAt = updatedAt
     }
 }
-

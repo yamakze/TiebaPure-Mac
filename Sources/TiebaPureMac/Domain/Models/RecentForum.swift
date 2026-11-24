@@ -80,4 +80,3 @@ enum RecentForumPolicy {
         return TiebaURL.image(url.absoluteString)
     }
 }
-

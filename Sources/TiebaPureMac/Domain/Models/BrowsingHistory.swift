@@ -144,4 +144,3 @@ enum BrowsingHistoryPolicy {
         return String(collapsed.prefix(maximumLength))
     }
 }
-

@@ -48,4 +48,3 @@ enum SearchHistoryPolicy {
         lhs.compare(rhs, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
     }
 }
-

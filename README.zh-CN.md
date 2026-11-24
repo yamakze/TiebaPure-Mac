@@ -15,7 +15,7 @@
 SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
 
 [![Platform](https://img.shields.io/badge/平台-macOS%2014%2B-blue?logo=apple)](#构建与运行)
-[![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white)](Package.swift)
+[![Swift](https://img.shields.io/badge/Swift-6.2%2B-F05138?logo=swift&logoColor=white)](Package.swift)
 [![License](https://img.shields.io/badge/许可-GPL--3.0-green)](LICENSE)
 
 <table>
@@ -57,7 +57,7 @@ SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
 - 🔐 **隔离登录与安全存储** — 基于系统 WebKit 容器完成官方登录认证，会话凭据存储于系统 Keychain，支持会话过期检测与平滑登出。
 - 🖼️ **原生图文呈现** — 点击正文或楼中楼的图片可预览和放大，语音和视频链接通过外部应用打开。
 - ⌨️ **系统级快捷键** — 完整支持键盘流操作，涵盖栏目切换、搜索框聚焦、列表刷新与历史导航。
-- 🔄 **自动更新** — 集成 Sparkle 2 框架，通过 Ed25519 签名验证从 GitHub Releases 自动检测与安装更新。
+- 🔄 **自动更新** — 已集成 Sparkle 2，配置签名更新源的构建支持 Ed25519 验证的自动更新。
 - 🎨 **原生桌面外观** — 深度适配 macOS 浅色与深色模式，严格遵循 Apple 人机交互界面规范。
 
 ## 键盘快捷键
@@ -78,6 +78,8 @@ SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
 
 系统要求：macOS 14+，支持 Apple Silicon 与 Intel 架构。
 
+`v0.1.0` 试用版使用 ad-hoc 签名，未经过 Apple 公证，需要手动下载更新。macOS 可能要求你在「隐私与安全性」中允许打开应用。[Apple 操作说明](https://support.apple.com/zh-cn/102445)
+
 ### 通过 Homebrew 安装
 
 ```bash
@@ -94,13 +96,13 @@ brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
 
 ### 手动下载
 
-从 [Releases](https://github.com/yamakze/TiebaPure-Mac/releases/latest) 下载最新发布的 `TiebaPure-Mac-<version>.zip`，解压后将 `TiebaPure-Mac.app` 拖入 **应用程序** 目录。
+从 [Releases](https://github.com/yamakze/TiebaPure-Mac/releases) 下载 `TiebaPure-Mac-<version>.zip`，解压后将 `TiebaPure-Mac.app` 拖入 **应用程序** 目录。
 
 若 macOS 拒绝打开应用，用同一版本发布页的 `SHA256SUMS.txt` 核对 ZIP。校验不符时重新下载。
 
 ## 构建与运行
 
-开发环境基线为 macOS 14+ 与 Xcode 15+。项目采用纯 SwiftPM 管理，通过根目录 `Makefile` 统一调度：
+构建需要 Swift 6.2 或更高版本，CI 使用 Xcode 26.2。根目录 `Makefile` 提供 SwiftPM 构建与打包入口。
 
 ```bash
 # 构建本地应用包（artifacts/macos/TiebaPure-Mac.app）
