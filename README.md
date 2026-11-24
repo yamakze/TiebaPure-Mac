@@ -76,7 +76,7 @@ It preserves full upstream Git history and original author attributions while re
 
 ## Installation
 
-System requirements: macOS 14+ (Sonoma or later), Apple Silicon and Intel Universal support.
+Requires an Apple Silicon Mac running macOS 14 (Sonoma) or later.
 
 ### Homebrew
 
@@ -115,7 +115,7 @@ make test
 # Verify project boundaries, versioning, and compliance files
 make verify
 
-# Build Universal release package
+# Build Apple Silicon release package
 make release
 
 # Clean build caches and review artifacts

@@ -76,7 +76,7 @@ SwiftUI · AppKit · WebKit · SwiftPM · Sparkle
 
 ## 安装与使用
 
-系统要求：macOS 14+，支持 Apple Silicon 与 Intel 架构。
+需要搭载 Apple 芯片的 Mac，系统版本为 macOS 14 或更高。
 
 ### 通过 Homebrew 安装
 
@@ -115,7 +115,7 @@ make test
 # 校验项目边界、版本号与合规文件
 make verify
 
-# 构建通用架构 Release 发布包
+# 构建 Apple 芯片版发布包
 make release
 
 # 清理构建缓存与临时审查输出

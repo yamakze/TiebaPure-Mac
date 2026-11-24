@@ -3,21 +3,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 CONFIGURATION="${1:-debug}"
-if (( $# > 2 )); then
-    echo "Usage: $0 [debug|release [--universal]]" >&2
+if (( $# > 1 )); then
+    echo "Usage: $0 [debug|release]" >&2
     exit 2
 fi
-case "$CONFIGURATION:${2:-}" in
-    debug:|release:) ARCHITECTURES=("$(uname -m)") ;;
-    release:--universal) ARCHITECTURES=(arm64 x86_64) ;;
-    *) echo "Usage: $0 [debug|release [--universal]]" >&2; exit 2 ;;
+case "$CONFIGURATION" in
+    debug|release) ;;
+    *) echo "Usage: $0 [debug|release]" >&2; exit 2 ;;
 esac
-BINARIES=()
-for architecture in "${ARCHITECTURES[@]}"; do
-    swift build --configuration "$CONFIGURATION" --product TiebaPureMac --arch "$architecture"
-    BIN_DIR="$(swift build --configuration "$CONFIGURATION" --arch "$architecture" --show-bin-path)"
-    BINARIES+=("$BIN_DIR/TiebaPureMac")
-done
+swift build --configuration "$CONFIGURATION" --product TiebaPureMac --arch arm64
+BIN_DIR="$(swift build --configuration "$CONFIGURATION" --arch arm64 --show-bin-path)"
 
 OUTPUT="$ROOT/artifacts/macos"
 mkdir -p "$OUTPUT"
@@ -25,11 +20,7 @@ STAGE="$(mktemp -d "$OUTPUT/.package.XXXXXX")"
 trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/TiebaPure-Mac.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-if (( ${#BINARIES[@]} == 1 )); then
-    cp "${BINARIES[0]}" "$APP/Contents/MacOS/"
-else
-    lipo -create "${BINARIES[@]}" -output "$APP/Contents/MacOS/TiebaPureMac"
-fi
+cp "$BIN_DIR/TiebaPureMac" "$APP/Contents/MacOS/"
 
 ICONSET="$STAGE/AppIcon.iconset"
 mkdir -p "$ICONSET"

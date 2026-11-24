@@ -42,7 +42,7 @@ jobs:
           scripts/verify-project.sh
           scripts/release-notes.sh "$RELEASE_TAG" >/dev/null
           swift test
-      - name: Sign and notarize Universal app
+      - name: Sign and notarize Apple Silicon app
         env:
           CODE_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -81,7 +81,7 @@ jobs:
             echo 'Developer ID Application signing is required.' >&2
             exit 1
           fi
-          scripts/build-app.sh release --universal
+          scripts/build-app.sh release
           app=artifacts/macos/TiebaPure-Mac.app
           ditto -c -k --keepParent "$app" "$work/notarize.zip"
           xcrun notarytool submit "$work/notarize.zip" --wait \

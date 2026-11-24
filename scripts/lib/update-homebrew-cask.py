@@ -57,7 +57,7 @@ cask "tiebapure-mac" do
     strategy :github_latest
   end
 
-{auto_updates}  depends_on macos: ">= :sonoma"
+{auto_updates}  depends_on arch: :arm64, macos: ">= :sonoma"
 
   app "TiebaPure-Mac.app"
 end
