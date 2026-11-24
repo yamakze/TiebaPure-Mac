@@ -1,97 +1,157 @@
+<div align="right">
+
+**English** | [简体中文](README.zh-CN.md)
+
+</div>
+
+<div align="center">
+
+<img src="docs/screenshots/icon.png" width="140" alt="TiebaPure-Mac" />
+
 # TiebaPure-Mac
 
-基于 [TiebaPure-iOS](https://github.com/infinityf4p/TiebaPure-iOS) 的原生 macOS 百度贴吧客户端。最低 macOS 14，使用 SwiftUI、AppKit、WebKit 与 SwiftPM。
+**Native macOS client for Baidu Tieba**
 
-本仓库保留 GitHub fork 关系、上游提交历史和原作者署名。来源基线与修改声明见 [NOTICE.md](NOTICE.md)，许可证为 [GPL-3.0-only](LICENSE)。
+SwiftUI · AppKit · WebKit Login · SwiftPM · Sparkle Auto-Update
 
-## 命名约定
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue?logo=apple)](#building)
+[![Swift](https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white)](Package.swift)
+[![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 
-| 用途 | 名称 |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/screenshot-home.png" alt="Home Feed & Sidebar Navigation" /></td>
+    <td width="50%"><img src="docs/screenshots/screenshot-thread.png" alt="Thread Reading & Continuous Pagination" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/screenshot-subposts.png" alt="Subpost Inspector Sidebar" /></td>
+    <td width="50%"><img src="docs/screenshots/screenshot-forum.png" alt="Forum Browsing & Filtering" /></td>
+  </tr>
+</table>
+
+</div>
+
+## Overview
+
+**TiebaPure-Mac** is a native macOS desktop client derived from [TiebaPure-iOS](https://github.com/infinityf4p/TiebaPure-iOS), engineered with SwiftUI and AppKit and optimized for large desktop displays and keyboard-first navigation.
+
+It preserves full upstream Git history and original author attributions while removing mobile-specific touch transitions and simulator dependencies, focusing on responsive browsing, searching, reading, and account management on macOS.
+
+## Features
+
+- 🧭 **Desktop Navigation** — Unified sidebar with Home Recommendations, Forum Directory, Search, Followed Forums, and Bookmarks. Supports hierarchical navigation stacks and history traversing.
+- 📖 **Seamless Reading Experience** — Continuous floor scrolling with author-only and reverse-order sorting options. Native right-hand Inspector drawer for subpost discussion threads.
+- 🔍 **Two-Tier Search** — Site-wide forum search and in-forum keyword search. Automatically persists recent forums and query history locally.
+- 🔐 **Isolated Login & Secure Storage** — Official authentication inside isolated WebKit containers. Session credentials are encrypted directly in the macOS Keychain with proactive expiration detection.
+- 🖼️ **Native Media Rendering** — Displays built-in Tieba emoticons and high-resolution post images with zoom previews. Safely opens voice and video links externally.
+- ⌨️ **Keyboard-Driven Shortcuts** — Complete keyboard shortcuts for section switching, search focus, content refreshing, and history navigation.
+- 🔄 **Automatic Updates** — Integrated Sparkle 2 framework for Ed25519 signature-verified updates directly from GitHub Releases.
+- 🎨 **Adaptive macOS Appearance** — Fluid support for Light and Dark system appearances following Apple Human Interface Guidelines.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
 | --- | --- |
-| GitHub 仓库、工作目录、SwiftPM package | `TiebaPure-Mac` |
-| 应用包、系统显示名、应用窗口 | `TiebaPure-Mac` / `TiebaPure-Mac.app` |
-| Swift 模块、可执行文件 | `TiebaPureMac`（Swift 标识符形式） |
-| 测试模块 | `TiebaPureMacTests` |
-| Bundle ID、Keychain 及偏好命名空间 | `io.github.yamakze.TiebaPureMac` |
-| 截图应用 | `TiebaPure-Mac-Screenshots.app`，独立 Bundle ID 后缀 `.Screenshots` |
+| `⌘1` / `⌘2` / `⌘3` | Switch to Home / Forums / Search |
+| `⌘F` | Focus search bar (in-forum on forum pages, site-wide elsewhere) |
+| `Return` | Submit forum name or search query |
+| `Esc` | Clear search query or exit input focus |
+| `⌘R` | Refresh current page, forum, or thread |
+| `⌘[` / `⌘]` | Navigate Back / Forward in history |
 
-`TiebaPure-iOS` 用于标识上游来源、历史及版权声明。协议生成类型和请求中的上游标识保留其兼容含义，不作为当前应用名称。
+## Installation
 
-## 当前进度
+System requirements: macOS 14+ (Sonoma or later), Apple Silicon and Intel Universal support.
 
-这是 Mac 工程迁移后的开发基线，尚未完成上游全部功能的桌面实现。
+### Homebrew
 
-| 范围 | 状态 |
-| --- | --- |
-| 推荐、进吧、搜索、帖子与楼中楼 | 列表与楼层连续加载，右侧阅读楼中楼。最近访问和搜索历史保存在本机。吧页工具栏可搜索当前贴吧，排序与精华筛选位于「显示」菜单 |
-| WebKit 登录、Keychain 凭证、会话失效处理 | 已接入 Mac 平台，真实账号登录需单独验收 |
-| 图片及表情 | 原生显示；复杂图文排版、预览、保存和加载缓存仍待完善 |
-| 视频及语音 | 通过系统打开远端链接；尚无内嵌播放器 |
-| 关注的吧、收藏夹 | 登录后从侧边栏访问，收藏可跳到记录的楼层。关注和收藏的写操作已有协议实现，仍待接入界面 |
-| 签到、消息、发帖及回复 | 保留协议与协调器及核心测试，尚未接入 Mac 界面 |
-| 历史、阅读位置、草稿及本地保存 | 保留存储能力，尚未接入 Mac 界面 |
-
-iOS 工程、分享扩展、触摸转场、IPA 打包和模拟器 CI 已从活动源码中移除，可在上游历史中查阅。
-
-## 构建
-
-本地开发基线为 Xcode 26.2。无需 XcodeGen；在 Xcode 中打开 `Package.swift`，或使用命令行：
-
-```sh
-scripts/verify-project.sh
-swift test
-scripts/compile_and_run.sh
-# 优化构建并启动
-scripts/compile_and_run.sh release
+```bash
+brew tap yamakze/tiebapure-mac https://github.com/yamakze/TiebaPure-Mac.git
+brew install --cask yamakze/tiebapure-mac/tiebapure-mac
 ```
 
-`scripts/compile_and_run.sh` 默认使用 debug，构建成功后重启当前检出目录对应的应用，并重新登记这个应用包。图标文件名随源图内容变化，供 macOS 在图标替换后重新识别。可从任意工作目录调用脚本。
+Upgrade:
 
-`artifacts/macos/TiebaPure-Mac.app` 为本地应用包，默认使用 ad-hoc 签名。`.build/` 存放 SwiftPM 及截图工具的中间产物。`scripts/build-app.sh release` 生成优化构建，加 `--universal` 同时构建 Apple Silicon 和 Intel 版本。
+```bash
+brew update
+brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
+```
 
-通过正式 GitHub Release 安装的应用可从「TiebaPure-Mac → 检查更新…」手动检查，或在「设置 → 软件更新」管理自动检查与安装。自动检查默认开启，自动安装由用户开启。本地构建显示更新配置状态。发布与签名流程见 [贡献约定](CONTRIBUTING.md#发布)。
+### Manual Download
 
-日常测试使用确定性 fixture，不访问真实贴吧服务。需要只读线上检查时显式运行：
+Download the latest `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases/latest), unpack it, and drag `TiebaPure-Mac.app` into your **Applications** folder.
 
-```sh
+> [!NOTE]
+> If macOS alerts that the app cannot be opened or is damaged, remove the quarantine flag in Terminal:
+> ```bash
+> xattr -cr /Applications/TiebaPure-Mac.app
+> ```
+
+## Building
+
+Requires macOS 14+ and Xcode 15+. Managed via SwiftPM and orchestrated with the root `Makefile`:
+
+```bash
+# Build the local macOS app bundle (artifacts/macos/TiebaPure-Mac.app)
+make build
+
+# Build and launch the application directly
+make run
+
+# Run core regression test suites
+make test
+
+# Verify project boundaries, versioning, and compliance files
+make verify
+
+# Build Universal release package
+make release
+
+# Clean build caches and review artifacts
+make clean
+```
+
+Standard tests rely on deterministic local fixtures and avoid live network access. To run read-only online connectivity verification prior to release:
+
+```bash
 RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests
 ```
 
-## 键盘操作
+## Architecture
 
-| 快捷键 | 操作 |
+```
+Sources/TiebaPureMac/
+├── App/                # App entry, window scenes, reader view, settings, and updates
+├── Domain/             # Core business models, content filtering, and protocol mapping
+├── Infrastructure/     # HTTP client, Protobuf models, Keychain auth, local storage, and coordinators
+└── DebugSupport/       # Offline development fixtures and screenshot runner support
+```
+
+```mermaid
+graph TD
+    App[App & Views] --> Domain[Domain Models]
+    App --> Infra[Infrastructure]
+    Domain --> Mappers[Domain Mappers]
+    Infra --> Network[Network & TiebaAPI]
+    Infra --> Auth[Auth & Keychain]
+    Infra --> Persistence[Local Storage]
+    Infra --> Protobuf[Protobuf Schemas]
+    Network --> Protobuf
+```
+
+## Documentation
+
+| Document | Description |
 | --- | --- |
-| `⌘1` / `⌘2` / `⌘3` | 首页 / 进吧 / 搜索 |
-| `⌘F` | 聚焦当前搜索框。在吧页搜索当前贴吧，其他无搜索框的页面打开全站搜索 |
-| `Return` | 提交贴吧名称或搜索词 |
-| `Esc` | 清空输入或退出输入焦点 |
-| `⌘R` | 「显示 → 刷新」当前列表或帖子 |
-| `⌘[` / `⌘]` | 返回列表 / 前进到刚读过的帖子 |
+| [Architecture Decisions](docs/architecture.md) | macOS architecture convergence, state ownership, and modular boundaries |
+| [Privacy & Data Handling](docs/privacy.md) | Official endpoint direct connectivity, Keychain protection, and local boundaries |
+| [Contributing & Release](CONTRIBUTING.md) | Development standards, Git commit guidelines, and GitHub Release workflow |
+| [Third-Party Licenses](LICENSES/README.md) | Pinned dependency versions and license notices for Sparkle and SwiftProtobuf |
+| [Notice & Attribution](NOTICE.md) | Original copyright attributions, baseline commits, and modification notices |
 
-## 界面截图
+## Declarations & Acknowledgements
 
-```sh
-scripts/capture-ui.sh
-# 或指定新的输出目录
-scripts/capture-ui.sh screenshots/review-01
-```
-
-在已登录图形桌面的 Mac 上运行，需要 Xcode 命令行工具和系统允许 UI 测试。脚本构建独立的 `TiebaPure-Mac-Screenshots.app`，用 XCTest 操作实际界面，输出 29 张 PNG、`index.html`、`manifest.json` 和 `Review.xcresult`。包含浅色与深色的主要页面，以及首页空白、错误、加载、翻页重试、账号底栏、个人资料、精华、吧内搜索、关注的吧、收藏夹和只看楼主。页面编号可直接用于反馈。
-
-业务页面复用 DEBUG 样例 API；截图应用使用独立 bundle ID、偏好域、内存账号和内存历史，不读取真实 Keychain。登录页仍加载百度 WebKit 页面，网络内容需单独验收。样例 API 与截图启动参数不会进入 Release 构建。系统分享菜单、图片右键菜单和 macOS 权限弹窗不属于页面截图清单。
-
-## 工程与贡献
-
-源码入口是 `Sources/TiebaPureMac/App/TiebaPureMacApp.swift`。模块边界、上游同步、验证与发布约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，迁移决策见 [docs/architecture.md](docs/architecture.md)。版本信息统一维护在 `Resources/Info.plist`。
-
-```sh
-git remote -v
-# origin    https://github.com/yamakze/TiebaPure-Mac.git
-# upstream  https://github.com/infinityf4p/TiebaPure-iOS.git
-```
-
-## 声明与致谢
-
-本项目与百度公司、百度贴吧官方无隶属、授权或认可关系。协议来自非官方接口，服务端行为可能变化。上游将发布、回复和资料编辑标为实验性功能；保留底层实现不代表已在 Mac 验证成功。
-
-感谢 infinityf4p 与上游贡献者，以及 [TiebaLite](https://github.com/HuanCheng65/TiebaLite)、[aiotieba](https://github.com/lumina37/aiotieba) 的协议研究。SwiftProtobuf 许可见 [LICENSES](LICENSES/SwiftProtobuf-Apache-2.0.txt)。
+- This project is an independent third-party desktop client with no affiliation, authorization, or endorsement from Baidu Inc. or Baidu Tieba. Protocols rely on unofficial endpoints and are subject to server-side changes.
+- Special thanks to [infinityf4p](https://github.com/infinityf4p/TiebaPure-iOS) and upstream contributors.
+- Protocol research credits to the [TiebaLite](https://github.com/HuanCheng65/TiebaLite) and [aiotieba](https://github.com/lumina37/aiotieba) open-source communities.
+- Distributed under the [GPL-3.0-only](LICENSE) license.
