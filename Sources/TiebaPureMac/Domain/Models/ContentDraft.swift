@@ -48,7 +48,7 @@ struct ContentDraftPruneCandidate: Sendable {
     let accountID: String
     let targetKey: String
     let updatedAt: Date
-    let imagesByteCount: Int?
+    let imagesByteCount: Int
 }
 
 enum ContentDraftPruner {
@@ -84,29 +84,15 @@ enum ContentDraftPruner {
         for candidate in ordered {
             let accountDrafts = retainedDraftsByAccount[candidate.accountID, default: 0]
             let accountBytes = retainedBytesByAccount[candidate.accountID, default: 0]
-            let byteCount = candidate.imagesByteCount.flatMap { $0 >= 0 ? $0 : nil }
+            let byteCount = candidate.imagesByteCount
 
             let exceedsCount = accountDrafts >= ContentDraftPolicy.maximumDraftsPerAccount
                 || retainedGlobalDrafts >= ContentDraftPolicy.maximumDraftsGlobally
-            let exceedsByteBudget: Bool
-            if let byteCount {
-                exceedsByteBudget = byteCount > ContentDraftPolicy.maximumAttachmentBytesPerDraft
-                    || fits(
-                        additionalBytes: byteCount,
-                        usedBytes: accountBytes,
-                        limit: ContentDraftPolicy.maximumAttachmentBytesPerAccount
-                    ) == false
-                    || fits(
-                        additionalBytes: byteCount,
-                        usedBytes: retainedGlobalBytes,
-                        limit: ContentDraftPolicy.maximumAttachmentBytesGlobally
-                    ) == false
-            } else {
-                // Legacy rows remain count-limited but are not guessed into a
-                // byte budget. Background repair resolves them before the next
-                // exact byte-based prune.
-                exceedsByteBudget = false
-            }
+            let exceedsByteBudget = byteCount > ContentDraftPolicy.maximumAttachmentBytesPerDraft
+                || !fits(additionalBytes: byteCount, usedBytes: accountBytes,
+                         limit: ContentDraftPolicy.maximumAttachmentBytesPerAccount)
+                || !fits(additionalBytes: byteCount, usedBytes: retainedGlobalBytes,
+                         limit: ContentDraftPolicy.maximumAttachmentBytesGlobally)
 
             if exceedsCount || exceedsByteBudget {
                 deletionIndices.insert(candidate.sourceIndex)
@@ -115,10 +101,8 @@ enum ContentDraftPruner {
 
             retainedDraftsByAccount[candidate.accountID] = accountDrafts + 1
             retainedGlobalDrafts += 1
-            if let byteCount {
-                retainedBytesByAccount[candidate.accountID] = accountBytes + byteCount
-                retainedGlobalBytes += byteCount
-            }
+            retainedBytesByAccount[candidate.accountID] = accountBytes + byteCount
+            retainedGlobalBytes += byteCount
         }
         return deletionIndices
     }
@@ -133,7 +117,6 @@ enum ContentDraftPruner {
 enum ContentDraftImageBlobCodec {
     private static let magic = Data([0x54, 0x50, 0x44, 0x49]) // TPDI
     private static let version: UInt8 = 2
-    private static let legacyJSONVersion: UInt8 = 1
     private static let headerSize = 8
     private static let frameHeaderSize = 8
     private static let maximumFrameBytes = 16 * 1_024 * 1_024
@@ -173,8 +156,7 @@ enum ContentDraftImageBlobCodec {
             return .damagedContainer
         }
 
-        let storedVersion = blob[magic.count]
-        guard storedVersion == version || storedVersion == legacyJSONVersion else {
+        guard blob[magic.count] == version else {
             return .damagedContainer
         }
         var images: [ContentSubmissionImage] = []
@@ -202,7 +184,7 @@ enum ContentDraftImageBlobCodec {
             let payload = Data(blob[offset..<(offset + length)])
             offset += length
             guard checksum(payload) == expectedChecksum,
-                  let image = decodeFrame(payload, version: storedVersion),
+                  let image = decodeFrame(payload),
                   image.data.isEmpty == false,
                   image.data.count <= ContentSubmissionPolicy.maximumImageBytes,
                   image.pixelWidth > 0,
@@ -243,14 +225,7 @@ enum ContentDraftImageBlobCodec {
         return payload
     }
 
-    private static func decodeFrame(
-        _ payload: Data,
-        version: UInt8
-    ) -> ContentSubmissionImage? {
-        if version == legacyJSONVersion {
-            return try? JSONDecoder().decode(ContentSubmissionImage.self, from: payload)
-        }
-
+    private static func decodeFrame(_ payload: Data) -> ContentSubmissionImage? {
         var offset = 0
         guard let uuidLength = readUInt8(payload, at: &offset),
               uuidLength > 0,

@@ -21,13 +21,6 @@ final class ContentDraftTests: XCTestCase {
         return blob
     }
 
-    private func makeLegacyImageBlob(_ images: [ContentSubmissionImage]) throws -> Data {
-        try makeFramedBlob(
-            version: 1,
-            payloads: images.map { try JSONEncoder().encode($0) }
-        )
-    }
-
     private func appendBigEndian(_ value: UInt32, to data: inout Data) {
         data.append(UInt8((value >> 24) & 0xff))
         data.append(UInt8((value >> 16) & 0xff))
@@ -178,38 +171,6 @@ final class ContentDraftTests: XCTestCase {
         XCTAssertTrue(
             try container.mainContext.fetch(FetchDescriptor<ContentDraftRecord>()).isEmpty
         )
-    }
-
-    @MainActor
-    func testLoadingLegacyDraftDoesNotPruneTheDraftBeingOpened() async throws {
-        let container = try makeInMemoryModelContainer()
-        let store = ContentDraftStore(modelContainer: container)
-        let imagesBlob = try ContentDraftImageBlobCodec.encode([])
-        let oldestTarget = makeTarget(threadID: 1)
-
-        for index in 0...ContentDraftPolicy.maximumDraftsGlobally {
-            let target = makeTarget(threadID: Int64(index + 1))
-            container.mainContext.insert(ContentDraftRecord(
-                accountID: "account-\(index % 3)",
-                targetKey: target.draftKey,
-                targetData: try JSONEncoder().encode(target),
-                title: "title-\(index)",
-                body: "body-\(index)",
-                imagesBlob: imagesBlob,
-                imagesByteCount: nil,
-                updatedAt: Date(timeIntervalSince1970: TimeInterval(index))
-            ))
-        }
-        try container.mainContext.save()
-
-        let outcome = await store.loadAsync(accountID: "account-0", target: oldestTarget)
-        guard case let .loaded(draft) = outcome else {
-            return XCTFail("Expected the legacy draft to load")
-        }
-        XCTAssertEqual(draft?.body, "body-0")
-        let records = try container.mainContext.fetch(FetchDescriptor<ContentDraftRecord>())
-        XCTAssertEqual(records.count, ContentDraftPolicy.maximumDraftsGlobally + 1)
-        XCTAssertTrue(records.contains { $0.targetKey == oldestTarget.draftKey })
     }
 
     @MainActor
@@ -366,38 +327,6 @@ final class ContentDraftTests: XCTestCase {
         let outcome = await store.loadAsync(accountID: "account", target: target)
         XCTAssertEqual(outcome, .damaged(.attachmentContainer))
         XCTAssertEqual(store.persistenceAvailability, .available)
-    }
-
-    @MainActor
-    func testLegacyByteCountBackfillPreservesVersionTwoBlobBytes() async throws {
-        let container = try makeInMemoryModelContainer()
-        let store = ContentDraftStore(modelContainer: container)
-        let target = makeTarget()
-        XCTAssertTrue(store.save(
-            accountID: "account",
-            target: target,
-            title: "title",
-            body: "body",
-            images: [makeImage(7)]
-        ))
-        let record = try XCTUnwrap(
-            container.mainContext.fetch(FetchDescriptor<ContentDraftRecord>()).first
-        )
-        let originalBlob = record.imagesBlob
-        XCTAssertEqual(
-            Data(originalBlob.prefix(5)),
-            Data([0x54, 0x50, 0x44, 0x49, 0x02])
-        )
-        record.imagesByteCount = nil
-        try container.mainContext.save()
-
-        let didRepair = await store.repairLegacyMetadataAndPruneAsync()
-        XCTAssertTrue(didRepair)
-        let repaired = try XCTUnwrap(
-            container.mainContext.fetch(FetchDescriptor<ContentDraftRecord>()).first
-        )
-        XCTAssertEqual(repaired.imagesByteCount, originalBlob.count)
-        XCTAssertEqual(repaired.imagesBlob, originalBlob)
     }
 
     @MainActor

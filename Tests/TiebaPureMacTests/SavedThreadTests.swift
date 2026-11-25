@@ -62,25 +62,23 @@ final class SavedThreadTests: XCTestCase {
         }
     }
 
-    func testLegacyVersionOneSnapshotMigratesToTextOnly() async throws {
+    func testSnapshotsRequireCurrentFormat() async throws {
         var snapshot = try await SavedThreadCaptureService(api: FixtureTiebaAPI()).capture(
             account: nil,
             threadID: FixtureTiebaAPI.threads[0].id,
             forumID: FixtureTiebaAPI.forum.id
         )
-        snapshot.formatVersion = 1
-        snapshot.mediaMode = nil
-        snapshot.mediaAssets = nil
-
-        let decoded = try JSONDecoder().decode(
+        let current = try JSONDecoder().decode(
             SavedThreadSnapshot.self,
             from: JSONEncoder().encode(snapshot)
-        )
-        let migrated = try decoded.validated()
+        ).validated()
+        XCTAssertEqual(current.effectiveMediaMode, .textOnly)
+        XCTAssertTrue(current.effectiveMediaAssets.isEmpty)
 
-        XCTAssertEqual(migrated.formatVersion, SavedThreadSnapshot.currentFormatVersion)
-        XCTAssertEqual(migrated.effectiveMediaMode, .textOnly)
-        XCTAssertTrue(migrated.effectiveMediaAssets.isEmpty)
+        snapshot.formatVersion = 1
+        XCTAssertThrowsError(try snapshot.validated()) { error in
+            XCTAssertEqual(error as? SavedThreadError, .unsupportedFormat)
+        }
     }
 
     func testMediaImportCommitBackupAndRollbackAreIntegrityChecked() async throws {
@@ -448,11 +446,5 @@ final class SavedThreadTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         return directory
-    }
-
-    private struct TestBackupManifest: Encodable {
-        var formatVersion: Int
-        var exportedAt: Date
-        var snapshots: [SavedThreadSnapshot]
     }
 }

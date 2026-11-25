@@ -303,9 +303,7 @@ final class ContentDraftRecord {
     var title: String
     var body: String
     @Attribute(.externalStorage) var imagesBlob: Data
-    // Optional so existing stores can migrate without materializing external
-    // attachment blobs. Legacy rows are backfilled off the main actor.
-    var imagesByteCount: Int?
+    var imagesByteCount: Int
     var updatedAt: Date
 
     init(
@@ -315,7 +313,6 @@ final class ContentDraftRecord {
         title: String,
         body: String,
         imagesBlob: Data,
-        imagesByteCount: Int? = nil,
         updatedAt: Date
     ) {
         self.accountID = accountID
@@ -324,7 +321,7 @@ final class ContentDraftRecord {
         self.title = title
         self.body = body
         self.imagesBlob = imagesBlob
-        self.imagesByteCount = imagesByteCount ?? imagesBlob.count
+        self.imagesByteCount = imagesBlob.count
         self.updatedAt = updatedAt
     }
 }

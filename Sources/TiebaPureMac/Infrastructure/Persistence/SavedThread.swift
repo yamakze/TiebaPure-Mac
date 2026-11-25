@@ -39,7 +39,7 @@ struct SavedThreadSnapshot: Identifiable, Equatable, Codable, Sendable {
     }
 
     func validated() throws -> SavedThreadSnapshot {
-        guard (1...Self.currentFormatVersion).contains(formatVersion) else {
+        guard formatVersion == Self.currentFormatVersion else {
             throw SavedThreadError.unsupportedFormat
         }
         let mainPosts = posts.filter { $0.post.floor == 1 }
@@ -106,7 +106,6 @@ struct SavedThreadSnapshot: Identifiable, Equatable, Codable, Sendable {
             throw SavedThreadError.invalidMediaManifest
         }
         var result = self
-        result.formatVersion = Self.currentFormatVersion
         result.mediaMode = effectiveMediaMode
         result.mediaAssets = effectiveMediaAssets
         return result

@@ -1,27 +1,14 @@
 import Foundation
 import SwiftData
 
-private struct ContentDraftByteCountUpdate: Sendable {
-    let persistentID: PersistentIdentifier
-    let byteCount: Int
-}
-
-private struct ContentDraftBackgroundLoadResult: Sendable {
-    let outcome: ContentDraftLoadOutcome
-    let byteCountUpdate: ContentDraftByteCountUpdate?
-}
-
-
-/// External attachment data is faulted only inside this model actor. The main
-/// context receives scalar byte-count updates and can enforce capacity without
-/// touching every attachment blob.
+/// Loads and decodes attachments outside the main SwiftData context.
 @ModelActor
 
 private actor ContentDraftDatabaseActor {
     func load(
         accountID: String,
         target: ContentSubmissionTarget
-    ) throws -> ContentDraftBackgroundLoadResult {
+    ) throws -> ContentDraftLoadOutcome {
         try Task.checkCancellation()
         let requestedAccountID = accountID
         let requestedTargetKey = target.draftKey
@@ -32,67 +19,35 @@ private actor ContentDraftDatabaseActor {
             }
         ))
         guard let record = preferredRecord(in: records) else {
-            return ContentDraftBackgroundLoadResult(outcome: .loaded(nil), byteCountUpdate: nil)
+            return .loaded(nil)
         }
         guard let storedTarget = try? JSONDecoder().decode(
             ContentSubmissionTarget.self,
             from: record.targetData
         ), storedTarget.draftKey == requestedTargetKey else {
-            return ContentDraftBackgroundLoadResult(
-                outcome: .damaged(.targetMetadata),
-                byteCountUpdate: nil
-            )
+            return .damaged(.targetMetadata)
         }
 
         let imagesBlob = record.imagesBlob
         try Task.checkCancellation()
-        let byteCountUpdate = record.imagesByteCount == imagesBlob.count
-            ? nil
-            : ContentDraftByteCountUpdate(
-                persistentID: record.persistentModelID,
-                byteCount: imagesBlob.count
-            )
         let images: [ContentSubmissionImage]
         switch ContentDraftImageBlobCodec.decodeWithIntegrity(imagesBlob) {
         case let .decoded(decodedImages):
             images = decodedImages
         case .damagedContainer:
-            return ContentDraftBackgroundLoadResult(
-                outcome: .damaged(.attachmentContainer),
-                byteCountUpdate: byteCountUpdate
-            )
+            return .damaged(.attachmentContainer)
         case .cancelled:
             throw CancellationError()
         }
 
-        return ContentDraftBackgroundLoadResult(
-            outcome: .loaded(ContentDraft(
-                accountID: accountID,
-                target: storedTarget,
-                title: record.title,
-                body: record.body,
-                images: images,
-                updatedAt: record.updatedAt
-            )),
-            byteCountUpdate: byteCountUpdate
-        )
-    }
-
-    func missingByteCountUpdates() throws -> [ContentDraftByteCountUpdate] {
-        let records = try modelContext.fetch(FetchDescriptor<ContentDraftRecord>())
-        var updates: [ContentDraftByteCountUpdate] = []
-        updates.reserveCapacity(records.count)
-        for record in records {
-            if let byteCount = record.imagesByteCount, byteCount >= 0 {
-                continue
-            }
-            try Task.checkCancellation()
-            updates.append(ContentDraftByteCountUpdate(
-                persistentID: record.persistentModelID,
-                byteCount: record.imagesBlob.count
-            ))
-        }
-        return updates
+        return .loaded(ContentDraft(
+            accountID: accountID,
+            target: storedTarget,
+            title: record.title,
+            body: record.body,
+            images: images,
+            updatedAt: record.updatedAt
+        ))
     }
 
     private func preferredRecord(in records: [ContentDraftRecord]) -> ContentDraftRecord? {
@@ -114,7 +69,6 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
     private let databaseActorTask: Task<ContentDraftDatabaseActor, Never>
     private let persistentBackendIsAvailable: Bool
     private(set) var persistenceAvailability: PersistenceAvailability
-    private var maintenanceTask: Task<Void, Never>?
 
     init(
         modelContainer: ModelContainer,
@@ -166,7 +120,6 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
             case .cancelled:
                 return false
             }
-            record.imagesByteCount = imagesBlob.count
             draft = ContentDraft(
                 accountID: normalizedAccountID,
                 target: storedTarget,
@@ -175,7 +128,6 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
                 images: images,
                 updatedAt: record.updatedAt
             )
-            try modelContext.save()
             markPersistenceSucceeded()
             return true
         } catch ContentDraftStoreError.damagedTarget {
@@ -219,12 +171,8 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
                 target: target
             )
             guard Task.isCancelled == false else { return .unavailable }
-            if let update = result.byteCountUpdate {
-                try applyByteCountUpdates([update])
-                try modelContext.save()
-            }
             markPersistenceSucceeded()
-            return result.outcome
+            return result
         } catch is CancellationError {
             return .unavailable
         } catch {
@@ -247,14 +195,7 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
 
         do {
             let imagesBlob = try ContentDraftImageBlobCodec.encode(draft.images)
-            let needsMaintenance = try persist(
-                draft,
-                normalizedID: normalizedID,
-                imagesBlob: imagesBlob
-            )
-            if needsMaintenance {
-                scheduleMaintenance()
-            }
+            try persist(draft, normalizedID: normalizedID, imagesBlob: imagesBlob)
             markPersistenceSucceeded()
             return true
         } catch {
@@ -286,22 +227,7 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
                 encodingTask.cancel()
             }
             try Task.checkCancellation()
-            if try hasUnknownByteCounts() {
-                let didRepair = await repairLegacyMetadataAndPruneAsync()
-                try Task.checkCancellation()
-                guard didRepair else {
-                    throw ContentDraftStoreError.persistenceUnavailable
-                }
-            }
-            try Task.checkCancellation()
-            let needsMaintenance = try persist(
-                draft,
-                normalizedID: normalizedID,
-                imagesBlob: imagesBlob
-            )
-            if needsMaintenance {
-                scheduleMaintenance()
-            }
+            try persist(draft, normalizedID: normalizedID, imagesBlob: imagesBlob)
             markPersistenceSucceeded()
         } catch is CancellationError {
             throw CancellationError()
@@ -407,7 +333,7 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
         _ draft: ContentDraft,
         normalizedID: String,
         imagesBlob: Data
-    ) throws -> Bool {
+    ) throws {
         guard imagesBlob.count <= ContentDraftPolicy.maximumAttachmentBytesPerDraft else {
             throw ContentDraftStoreError.attachmentBudgetExceeded
         }
@@ -434,13 +360,25 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
                 title: draft.title,
                 body: draft.body,
                 imagesBlob: imagesBlob,
-                imagesByteCount: imagesBlob.count,
                 updatedAt: draft.updatedAt
             ))
         }
-        let needsMaintenance = try pruneUsingByteCountMetadata()
+        let records = try modelContext.fetch(FetchDescriptor<ContentDraftRecord>())
+        let candidates = records.enumerated().map { index, record in
+            ContentDraftPruneCandidate(
+                sourceIndex: index,
+                persistentID: String(describing: record.persistentModelID),
+                accountID: record.accountID,
+                targetKey: record.targetKey,
+                updatedAt: record.updatedAt,
+                imagesByteCount: record.imagesByteCount
+            )
+        }
+        let deletionIndices = ContentDraftPruner.deletionIndices(for: candidates)
+        for index in deletionIndices {
+            modelContext.delete(records[index])
+        }
         try modelContext.save()
-        return needsMaintenance
     }
 
     private func normalizedAccountID(_ accountID: String) throws -> String {
@@ -457,78 +395,6 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
                 return $0.updatedAt < $1.updatedAt
             }
             return $0.persistentModelID < $1.persistentModelID
-        }
-    }
-
-    @discardableResult
-    func repairLegacyMetadataAndPruneAsync() async -> Bool {
-        guard requirePersistence(operation: "repair content draft metadata") else { return false }
-        do {
-            let databaseActor = await databaseActorTask.value
-            guard Task.isCancelled == false else { return false }
-            let updates = try await databaseActor.missingByteCountUpdates()
-            guard Task.isCancelled == false else { return false }
-            try applyByteCountUpdates(updates)
-            _ = try pruneUsingByteCountMetadata()
-            try modelContext.save()
-            markPersistenceSucceeded()
-            return true
-        } catch is CancellationError {
-            return false
-        } catch {
-            modelContext.rollback()
-            return fail(error, operation: "repair content draft metadata")
-        }
-    }
-
-    private func hasUnknownByteCounts() throws -> Bool {
-        try modelContext.fetch(FetchDescriptor<ContentDraftRecord>()).contains { record in
-            guard let byteCount = record.imagesByteCount else { return true }
-            return byteCount < 0
-        }
-    }
-
-    private func applyByteCountUpdates(_ updates: [ContentDraftByteCountUpdate]) throws {
-        guard updates.isEmpty == false else { return }
-        let byteCountsByID = Dictionary(uniqueKeysWithValues: updates.map {
-            ($0.persistentID, $0.byteCount)
-        })
-        for record in try modelContext.fetch(FetchDescriptor<ContentDraftRecord>()) {
-            if let byteCount = byteCountsByID[record.persistentModelID] {
-                record.imagesByteCount = byteCount
-            }
-        }
-    }
-
-    /// Returns whether legacy records still need an off-main byte-count repair.
-    private func pruneUsingByteCountMetadata() throws -> Bool {
-        let records = try modelContext.fetch(FetchDescriptor<ContentDraftRecord>())
-        let candidates = records.enumerated().map { index, record in
-            ContentDraftPruneCandidate(
-                sourceIndex: index,
-                persistentID: String(describing: record.persistentModelID),
-                accountID: record.accountID,
-                targetKey: record.targetKey,
-                updatedAt: record.updatedAt,
-                imagesByteCount: record.imagesByteCount
-            )
-        }
-        let deletionIndices = ContentDraftPruner.deletionIndices(for: candidates)
-        for index in deletionIndices {
-            modelContext.delete(records[index])
-        }
-        return records.contains { record in
-            guard let byteCount = record.imagesByteCount else { return true }
-            return byteCount < 0
-        }
-    }
-
-    private func scheduleMaintenance() {
-        guard maintenanceTask == nil else { return }
-        maintenanceTask = Task { [weak self] in
-            guard let self else { return }
-            _ = await repairLegacyMetadataAndPruneAsync()
-            maintenanceTask = nil
         }
     }
 
@@ -654,10 +520,5 @@ final class ContentDraftStore {
     @discardableResult
     func clear(accountID: String) -> Bool {
         persistence.clear(accountID: accountID)
-    }
-
-    @discardableResult
-    func repairLegacyMetadataAndPruneAsync() async -> Bool {
-        await persistence.repairLegacyMetadataAndPruneAsync()
     }
 }

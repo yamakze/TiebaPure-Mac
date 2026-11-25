@@ -19,8 +19,6 @@ protocol ContentDraftPersistenceBackend: AnyObject {
     func saveAsync(_ draft: ContentDraft) async throws
     func delete(accountID: String, target: ContentSubmissionTarget) -> Bool
     func clear(accountID: String) -> Bool
-    func repairLegacyMetadataAndPruneAsync() async -> Bool
-
 }
 
 extension ContentDraftPersistenceBackend {
@@ -59,6 +57,4 @@ final class UnavailableContentDraftPersistenceBackend: ContentDraftPersistenceBa
 
     func delete(accountID: String, target: ContentSubmissionTarget) -> Bool { false }
     func clear(accountID: String) -> Bool { false }
-    func repairLegacyMetadataAndPruneAsync() async -> Bool { false }
-
 }
