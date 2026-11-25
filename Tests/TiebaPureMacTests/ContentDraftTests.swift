@@ -2,88 +2,13 @@ import SwiftData
 import XCTest
 @testable import TiebaPureMac
 
-private enum LegacyContentDraftSchemaV1: VersionedSchema {
-    static let versionIdentifier = Schema.Version(1, 0, 0)
-
-    static var models: [any PersistentModel.Type] {
-        [
-            ThreadFavoriteRecord.self,
-            ThreadReadingPositionRecord.self,
-            BrowsingHistoryRecord.self,
-            RecentForumRecord.self,
-            SearchHistoryRecord.self,
-            ContentDraftRecord.self
-        ]
-    }
-
-    @Model
-    final class ContentDraftRecord {
-        var accountID: String
-        var targetKey: String
-        var targetData: Data
-        var title: String
-        var body: String
-        @Attribute(.externalStorage) var imagesBlob: Data
-        var updatedAt: Date
-
-        init(
-            accountID: String,
-            targetKey: String,
-            targetData: Data,
-            title: String,
-            body: String,
-            imagesBlob: Data,
-            updatedAt: Date
-        ) {
-            self.accountID = accountID
-            self.targetKey = targetKey
-            self.targetData = targetData
-            self.title = title
-            self.body = body
-            self.imagesBlob = imagesBlob
-            self.updatedAt = updatedAt
-        }
-    }
-}
-
 final class ContentDraftTests: XCTestCase {
     private func makeInMemoryModelContainer() throws -> ModelContainer {
-        let schema = Schema(AppModelContainer.models)
+        let schema = Schema([ContentDraftRecord.self])
         return try ModelContainer(
             for: schema,
             configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         )
-    }
-
-    private func makePersistentModelContainer(
-        at storeURL: URL,
-        models: [any PersistentModel.Type] = AppModelContainer.models
-    ) throws -> ModelContainer {
-        try makePersistentModelContainer(at: storeURL, schema: Schema(models))
-    }
-
-    private func makePersistentModelContainer(
-        at storeURL: URL,
-        schema: Schema
-    ) throws -> ModelContainer {
-        return try ModelContainer(
-            for: schema,
-            configurations: ModelConfiguration(
-                schema: schema,
-                url: storeURL,
-                cloudKitDatabase: .none
-            )
-        )
-    }
-
-    private func makeTemporaryStoreURL() throws -> (directory: URL, store: URL) {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TiebaPure-ContentDraftTests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true
-        )
-        return (directory, directory.appendingPathComponent("App.store"))
     }
 
     private func makeFramedBlob(version: UInt8, payloads: [Data]) -> Data {
@@ -473,106 +398,6 @@ final class ContentDraftTests: XCTestCase {
         )
         XCTAssertEqual(repaired.imagesByteCount, originalBlob.count)
         XCTAssertEqual(repaired.imagesBlob, originalBlob)
-    }
-
-    @MainActor
-    func testReleasedSchemaStoreMigratesToSchemaContainingDrafts() async throws {
-        let location = try makeTemporaryStoreURL()
-        defer { try? FileManager.default.removeItem(at: location.directory) }
-
-        let releasedModels: [any PersistentModel.Type] = [
-            ThreadFavoriteRecord.self,
-            ThreadReadingPositionRecord.self,
-            BrowsingHistoryRecord.self,
-            RecentForumRecord.self,
-            SearchHistoryRecord.self
-        ]
-        do {
-            let releasedContainer = try makePersistentModelContainer(
-                at: location.store,
-                models: releasedModels
-            )
-            releasedContainer.mainContext.insert(SearchHistoryRecord(
-                keyword: "升级前记录",
-                sortIndex: 0
-            ))
-            try releasedContainer.mainContext.save()
-        }
-
-        let upgradedContainer = try makePersistentModelContainer(at: location.store)
-        let migratedSearchRecords = try upgradedContainer.mainContext.fetch(
-            FetchDescriptor<SearchHistoryRecord>()
-        )
-        XCTAssertEqual(migratedSearchRecords.map(\.keyword), ["升级前记录"])
-
-        let target = makeTarget()
-        let image = makeImage(12)
-        let store = ContentDraftStore(modelContainer: upgradedContainer)
-        try await store.saveAsync(
-            accountID: "account",
-            target: target,
-            title: "迁移后标题",
-            body: "迁移后正文",
-            images: [image]
-        )
-        let outcome = await store.loadAsync(accountID: "account", target: target)
-        guard case let .loaded(draft) = outcome else {
-            return XCTFail("Expected the migrated store to persist drafts")
-        }
-        XCTAssertEqual(draft?.title, "迁移后标题")
-        XCTAssertEqual(draft?.images, [image])
-    }
-
-    @MainActor
-    func testPersistentLegacyDraftShapeReopensAndBackfillsMetadata() async throws {
-        let location = try makeTemporaryStoreURL()
-        defer { try? FileManager.default.removeItem(at: location.directory) }
-        let target = makeTarget()
-        let image = makeImage(27)
-        let legacyBlob = try makeLegacyImageBlob([image])
-
-        let currentDraftEntityName = try XCTUnwrap(
-            Schema([ContentDraftRecord.self]).entities.first?.name
-        )
-        XCTAssertTrue(
-            Schema(versionedSchema: LegacyContentDraftSchemaV1.self)
-                .entities
-                .map(\.name)
-                .contains(currentDraftEntityName)
-        )
-        do {
-            let legacyContainer = try makePersistentModelContainer(
-                at: location.store,
-                schema: Schema(versionedSchema: LegacyContentDraftSchemaV1.self)
-            )
-            let record = LegacyContentDraftSchemaV1.ContentDraftRecord(
-                accountID: "account",
-                targetKey: target.draftKey,
-                targetData: try JSONEncoder().encode(target),
-                title: "旧标题",
-                body: "旧正文",
-                imagesBlob: legacyBlob,
-                updatedAt: Date(timeIntervalSince1970: 123)
-            )
-            legacyContainer.mainContext.insert(record)
-            try legacyContainer.mainContext.save()
-        }
-
-        let reopenedContainer = try makePersistentModelContainer(at: location.store)
-        let store = ContentDraftStore(modelContainer: reopenedContainer)
-        let outcome = await store.loadAsync(accountID: "account", target: target)
-        guard case let .loaded(draft) = outcome else {
-            return XCTFail("Expected the legacy draft shape to reopen")
-        }
-        XCTAssertEqual(draft?.title, "旧标题")
-        XCTAssertEqual(draft?.body, "旧正文")
-        XCTAssertEqual(draft?.images, [image])
-
-        let migratedRecord = try XCTUnwrap(
-            reopenedContainer.mainContext.fetch(FetchDescriptor<ContentDraftRecord>()).first
-        )
-        XCTAssertEqual(migratedRecord.imagesByteCount, legacyBlob.count)
-        XCTAssertEqual(migratedRecord.imagesBlob, legacyBlob)
     }
 
     @MainActor

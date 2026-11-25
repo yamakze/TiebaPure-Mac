@@ -4,45 +4,25 @@ import Foundation
 @MainActor
 @Observable
 final class SearchHistoryStore {
-    static let shared = SearchHistoryStore()
+    static let shared = SearchHistoryStore(persistence: AppOrderedCollectionPersistence.searchHistory)
 
-    private let defaults: UserDefaults
-    private let key: String
     private let limit: Int
     private let persistence: any SearchHistoryPersistence
     private let persistentBackendIsAvailable: Bool
     private let faultInjector: PersistenceFaultInjector
-    private(set) var items: [String]
-    private(set) var persistenceAvailability: PersistenceAvailability
+    private(set) var items: [String] = []
+    private(set) var persistenceAvailability: PersistenceAvailability = .unavailable
 
     init(
-        defaults: UserDefaults = .standard,
-        key: String = "io.github.yamakze.TiebaPureMac.searchHistory",
         limit: Int = SearchHistoryPolicy.maximumStoredEntries,
         persistence: any SearchHistoryPersistence,
         faultInjector: PersistenceFaultInjector = .none
     ) {
-        let configuredLimit = min(max(limit, 0), SearchHistoryPolicy.maximumStoredEntries)
-        self.defaults = defaults
-        self.key = key
-        self.limit = configuredLimit
+        self.limit = min(max(limit, 0), SearchHistoryPolicy.maximumStoredEntries)
         self.persistence = persistence
         self.faultInjector = faultInjector
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
-        let snapshot = HistoryStorage.initialSnapshot(
-            capability: persistence.capability,
-            collection: "search history",
-            defaults: defaults,
-            legacyKey: key,
-            legacyValue: defaults.object(forKey: key),
-            decodeLegacy: { $0 as? [String] },
-            load: persistence.load,
-            replaceAll: persistence.replaceAll,
-            sanitize: { SearchHistoryPolicy.sanitized($0, limit: configuredLimit) },
-            faultInjector: faultInjector
-        )
-        items = snapshot.items
-        persistenceAvailability = snapshot.availability
+        reload()
     }
 
     /// Returns whether the snapshot was read, including from a non-durable backend.
@@ -89,11 +69,7 @@ final class SearchHistoryStore {
 
     @discardableResult
     func clear() -> Bool {
-        let succeeded = persist([])
-        if succeeded, persistence.capability.isDurable {
-            defaults.removeObject(forKey: key)
-        }
-        return succeeded
+        persist([])
     }
 
     @discardableResult

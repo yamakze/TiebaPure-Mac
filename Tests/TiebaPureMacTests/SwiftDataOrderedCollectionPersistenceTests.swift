@@ -8,31 +8,23 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testAdaptersShareContainerWithoutOverwritingOtherTablesAndPreserveOrder() throws {
+    func testHistoryAdaptersPreserveOrderAndUnchangedRows() throws {
         let container = try makeInMemoryModelContainer()
-        let browsing = SwiftDataBrowsingHistoryPersistence(modelContainer: container)
         let recent = SwiftDataRecentForumPersistence(modelContainer: container)
         let search = SwiftDataSearchHistoryPersistence(modelContainer: container)
 
-        let browsingEntries = [
-            makeBrowsingEntry(threadID: 2, visitedAt: 2),
-            makeBrowsingEntry(threadID: 1, visitedAt: 1)
-        ]
         let recentEntries = [
             makeRecentForum(name: "second", updatedAt: 2),
             makeRecentForum(name: "first", updatedAt: 1)
         ]
         let searchEntries = ["second", "first"]
 
-        try browsing.replaceAll(browsingEntries)
         try recent.replaceAll(recentEntries)
         try search.replaceAll(searchEntries)
 
-        let reopenedBrowsing = SwiftDataBrowsingHistoryPersistence(modelContainer: container)
         let reopenedRecent = SwiftDataRecentForumPersistence(modelContainer: container)
         let reopenedSearch = SwiftDataSearchHistoryPersistence(modelContainer: container)
 
-        XCTAssertEqual(try reopenedBrowsing.load(), browsingEntries)
         XCTAssertEqual(try reopenedRecent.load(), recentEntries)
         XCTAssertEqual(try reopenedSearch.load(), searchEntries)
 
@@ -48,7 +40,7 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
 
     @MainActor
     func testBrowsingAsyncExecutorCommitIsVisibleToFreshLoader() async throws {
-        let container = try makeInMemoryModelContainer()
+        let container = try makeInMemoryModelContainer(models: [BrowsingHistoryRecord.self])
         let writer = SwiftDataBrowsingHistoryPersistence(modelContainer: container)
         let first = makeBrowsingEntry(threadID: 1, visitedAt: 1)
         let second = makeBrowsingEntry(threadID: 2, visitedAt: 2)
@@ -62,24 +54,16 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testBeforeCommitFailureRollsBackEveryAdapter() throws {
+    func testBeforeCommitFailureRollsBackHistoryAdapters() throws {
         let container = try makeInMemoryModelContainer()
-        let browsing = SwiftDataBrowsingHistoryPersistence(modelContainer: container)
         let recent = SwiftDataRecentForumPersistence(modelContainer: container)
         let search = SwiftDataSearchHistoryPersistence(modelContainer: container)
 
-        let originalBrowsing = [makeBrowsingEntry(threadID: 1, visitedAt: 1)]
         let originalRecent = [makeRecentForum(name: "first", updatedAt: 1)]
         let originalSearch = ["first"]
-        try browsing.replaceAll(originalBrowsing)
         try recent.replaceAll(originalRecent)
         try search.replaceAll(originalSearch)
 
-        XCTAssertThrowsError(
-            try browsing.replaceAll([makeBrowsingEntry(threadID: 2, visitedAt: 2)]) {
-                throw InjectedFailure.beforeCommit
-            }
-        )
         XCTAssertThrowsError(
             try recent.replaceAll([makeRecentForum(name: "second", updatedAt: 2)]) {
                 throw InjectedFailure.beforeCommit
@@ -91,17 +75,44 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
             }
         )
 
-        XCTAssertEqual(try browsing.load(), originalBrowsing)
         XCTAssertEqual(try recent.load(), originalRecent)
         XCTAssertEqual(try search.load(), originalSearch)
     }
 
-    func testAppSchemaStillIncludesEveryOrderedCollectionRecordType() {
-        let identifiers = Set(AppModelContainer.models.map(ObjectIdentifier.init))
+    @MainActor
+    func testReaderHistoryUsesOnlyItsNamedStoreAndReopensSavedEntries() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let schema = Schema(AppModelContainer.historyModels)
+        XCTAssertEqual(Set(schema.entities.map(\.name)), ["RecentForumRecord", "SearchHistoryRecord"])
+        let oldURL = base.appendingPathComponent("default.store")
+        func openOldStore() throws -> ModelContainer {
+            try ModelContainer(for: schema, configurations: ModelConfiguration(schema: schema, url: oldURL))
+        }
+        do {
+            let old = try openOldStore()
+            try SwiftDataSearchHistoryPersistence(modelContainer: old).replaceAll(["old"])
+        }
 
-        XCTAssertTrue(identifiers.contains(ObjectIdentifier(BrowsingHistoryRecord.self)))
-        XCTAssertTrue(identifiers.contains(ObjectIdentifier(RecentForumRecord.self)))
-        XCTAssertTrue(identifiers.contains(ObjectIdentifier(SearchHistoryRecord.self)))
+        let visits = [makeRecentForum(name: "Swift", updatedAt: 10)]
+        do {
+            let new = AppModelContainer.openHistory(baseDirectoryURL: base)
+            XCTAssertEqual(new.availability, .available)
+            let search = SwiftDataSearchHistoryPersistence(modelContainer: new.container)
+            let recent = SwiftDataRecentForumPersistence(modelContainer: new.container)
+            XCTAssertTrue(try search.load().isEmpty)
+            XCTAssertTrue(try recent.load().isEmpty)
+            try search.replaceAll(["new"])
+            try recent.replaceAll(visits)
+        }
+
+        let reopened = AppModelContainer.openHistory(baseDirectoryURL: base)
+        XCTAssertEqual(reopened.availability, .available)
+        XCTAssertEqual(try SwiftDataSearchHistoryPersistence(modelContainer: reopened.container).load(), ["new"])
+        XCTAssertEqual(try SwiftDataRecentForumPersistence(modelContainer: reopened.container).load(), visits)
+        let old = try openOldStore()
+        XCTAssertEqual(try SwiftDataSearchHistoryPersistence(modelContainer: old).load(), ["old"])
     }
 
     @MainActor
@@ -110,7 +121,7 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
 
         XCTAssertEqual(
             SwiftDataBrowsingHistoryPersistence(
-                modelContainer: container,
+                modelContainer: try makeInMemoryModelContainer(models: [BrowsingHistoryRecord.self]),
                 persistenceAvailability: .unavailable
             ).capability,
             .fallback
@@ -132,8 +143,10 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
     }
 
     @MainActor
-    private func makeInMemoryModelContainer() throws -> ModelContainer {
-        let schema = Schema(AppModelContainer.models)
+    private func makeInMemoryModelContainer(
+        models: [any PersistentModel.Type] = AppModelContainer.historyModels
+    ) throws -> ModelContainer {
+        let schema = Schema(models)
         return try ModelContainer(
             for: schema,
             configurations: ModelConfiguration(

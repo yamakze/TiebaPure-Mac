@@ -8,43 +8,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         case mutationFailed
     }
 
-    private func makeScratchDefaults(function: String = #function) throws -> UserDefaults {
-        let suiteName = "\(function).\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        addTeardownBlock {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-        return defaults
-    }
-
-    @MainActor
-    func testFallbackMigrationStagesSnapshotWithoutDeletingLegacyOrAcceptingUserWrites() throws {
-        let defaults = try makeScratchDefaults()
-        let key = "non-durable-search-history"
-        defaults.set([" first ", "SECOND", "second"], forKey: key)
-        let persistence = TestSearchHistoryPersistence(
-            capability: .fallback
-        )
-
-        let store = SearchHistoryStore(
-            defaults: defaults,
-            key: key,
-            limit: 20,
-            persistence: persistence
-        )
-
-        XCTAssertEqual(store.items, ["first", "SECOND"])
-        XCTAssertEqual(persistence.values, ["first", "SECOND"])
-        XCTAssertEqual(persistence.loadCallCount, 1)
-        XCTAssertEqual(persistence.replaceCallCount, 1)
-        XCTAssertEqual(defaults.stringArray(forKey: key), [" first ", "SECOND", "second"])
-        XCTAssertEqual(store.persistenceAvailability, .unavailable)
-
-        XCTAssertFalse(store.clear())
-        XCTAssertEqual(defaults.stringArray(forKey: key), [" first ", "SECOND", "second"])
-    }
-
     @MainActor
     func testReplaceFailureDoesNotPublishCandidateSnapshot() throws {
         let original = RecentForum(
@@ -54,7 +17,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         )
         let persistence = TestRecentForumPersistence(values: [original])
         let store = RecentForumStore(
-            defaults: try makeScratchDefaults(),
             persistence: persistence,
             now: { Date(timeIntervalSinceReferenceDate: 2) }
         )
@@ -68,83 +30,19 @@ final class PersistenceBoundaryTests: XCTestCase {
     }
 
     @MainActor
-    func testLoadFailureKeepsLegacyValueAndMarksStoreUnavailable() throws {
-        let defaults = try makeScratchDefaults()
-        let key = "load-failure-search-history"
-        defaults.set(["legacy"], forKey: key)
-        let persistence = TestSearchHistoryPersistence()
-        persistence.loadError = ExpectedError.loadFailed
-
-        let store = SearchHistoryStore(
-            defaults: defaults,
-            key: key,
-            persistence: persistence
-        )
-
-        XCTAssertEqual(store.items, ["legacy"])
-        XCTAssertEqual(defaults.stringArray(forKey: key), ["legacy"])
-        XCTAssertEqual(persistence.loadCallCount, 1)
-        XCTAssertEqual(persistence.replaceCallCount, 0)
-        XCTAssertEqual(store.persistenceAvailability, .unavailable)
-    }
-
-    @MainActor
-    func testMigrationUsesExistingSwiftDataAndRemovesLegacyAfterSuccessfulWrite() throws {
-        let defaults = try makeScratchDefaults()
-        let key = "existing-search-history"
-        defaults.set(["legacy"], forKey: key)
+    func testLoadFailureMarksStoreUnavailableAndCanReload() {
         let persistence = TestSearchHistoryPersistence(values: [" first ", "FIRST"])
+        persistence.loadError = ExpectedError.loadFailed
+        let store = SearchHistoryStore(persistence: persistence)
+        XCTAssertTrue(store.items.isEmpty)
+        XCTAssertEqual(store.persistenceAvailability, .unavailable)
+        XCTAssertEqual(persistence.replaceCallCount, 0)
 
-        let store = SearchHistoryStore(defaults: defaults, key: key, persistence: persistence)
-
+        persistence.loadError = nil
+        XCTAssertTrue(store.reload())
         XCTAssertEqual(store.items, ["first"])
         XCTAssertEqual(persistence.values, ["first"])
-        XCTAssertEqual(persistence.loadCallCount, 1)
-        XCTAssertEqual(persistence.replaceCallCount, 1)
-        XCTAssertNil(defaults.object(forKey: key))
         XCTAssertEqual(store.persistenceAvailability, .available)
-    }
-
-    @MainActor
-    func testFailedMigrationKeepsOldValueAndShowsDecodedHistory() throws {
-        let defaults = try makeScratchDefaults()
-        let key = "failed-browsing-history-migration"
-        let entry = makeHistoryEntry(id: 7, title: "旧记录", visitedAt: 7)
-        let legacy = try JSONEncoder().encode([entry])
-        defaults.set(legacy, forKey: key)
-        let persistence = TestBrowsingHistoryPersistence()
-
-        let store = BrowsingHistoryStore(
-            defaults: defaults,
-            key: key,
-            persistence: persistence,
-            faultInjector: PersistenceFaultInjector { point in
-                if point == .legacyMigration { throw ExpectedError.replaceFailed }
-            }
-        )
-
-        XCTAssertEqual(store.items, [entry])
-        XCTAssertTrue(persistence.values.isEmpty)
-        XCTAssertEqual(persistence.loadCallCount, 1)
-        XCTAssertEqual(persistence.replaceCallCount, 1)
-        XCTAssertEqual(defaults.data(forKey: key), legacy)
-        XCTAssertEqual(store.persistenceAvailability, .unavailable)
-    }
-
-    @MainActor
-    func testMalformedLegacyDataIsRetainedWithoutWritingAnEmptySnapshot() throws {
-        let defaults = try makeScratchDefaults()
-        let key = "malformed-recent-forums"
-        let malformed = Data("{}".utf8)
-        defaults.set(malformed, forKey: key)
-        let persistence = TestRecentForumPersistence()
-
-        let store = RecentForumStore(defaults: defaults, key: key, persistence: persistence)
-
-        XCTAssertTrue(store.items.isEmpty)
-        XCTAssertEqual(persistence.replaceCallCount, 0)
-        XCTAssertEqual(defaults.data(forKey: key), malformed)
-        XCTAssertEqual(store.persistenceAvailability, .unavailable)
     }
 
     @MainActor
@@ -152,21 +50,9 @@ final class PersistenceBoundaryTests: XCTestCase {
         let browsingPersistence = TestBrowsingHistoryPersistence(capability: .unavailable)
         let recentPersistence = TestRecentForumPersistence(capability: .unavailable)
         let searchPersistence = TestSearchHistoryPersistence(capability: .unavailable)
-        let browsing = BrowsingHistoryStore(
-            defaults: try makeScratchDefaults(function: "browsing"),
-            persistence: browsingPersistence
-        )
-        let recent = RecentForumStore(
-            defaults: try makeScratchDefaults(function: "recent"),
-            persistence: recentPersistence
-        )
-        let searchDefaults = try makeScratchDefaults(function: "search")
-        searchDefaults.set(["legacy"], forKey: "unavailable-search")
-        let search = SearchHistoryStore(
-            defaults: searchDefaults,
-            key: "unavailable-search",
-            persistence: searchPersistence
-        )
+        let browsing = BrowsingHistoryStore(persistence: browsingPersistence)
+        let recent = RecentForumStore(persistence: recentPersistence)
+        let search = SearchHistoryStore(persistence: searchPersistence)
 
         XCTAssertFalse(browsing.record(thread: makeThread(id: 1, title: "浏览")))
         let backgroundResult = await browsing.recordInBackground(
@@ -178,8 +64,7 @@ final class PersistenceBoundaryTests: XCTestCase {
         XCTAssertFalse(browsing.reload())
         XCTAssertFalse(recent.reload())
         XCTAssertFalse(search.reload())
-        XCTAssertEqual(search.items, ["legacy"])
-        XCTAssertEqual(searchDefaults.stringArray(forKey: "unavailable-search"), ["legacy"])
+        XCTAssertTrue(search.items.isEmpty)
 
         XCTAssertEqual(browsingPersistence.replaceCallCount, 0)
         XCTAssertEqual(browsingPersistence.loadCallCount, 0)
@@ -200,7 +85,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         persistence.nextMutationGate = gate
         var tick: TimeInterval = 0
         let store = BrowsingHistoryStore(
-            defaults: try makeScratchDefaults(),
             limit: 2,
             persistence: persistence
         ) {
@@ -240,7 +124,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         persistence.nextMutationGate = gate
         persistence.failingMutationOrdinals = [1]
         let store = BrowsingHistoryStore(
-            defaults: try makeScratchDefaults(),
             persistence: persistence
         )
 
@@ -265,7 +148,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         let persistence = TestBrowsingHistoryPersistence()
         persistence.nextMutationGate = gate
         let store = BrowsingHistoryStore(
-            defaults: try makeScratchDefaults(),
             persistence: persistence
         )
 
@@ -293,7 +175,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         let persistence = TestBrowsingHistoryPersistence()
         persistence.nextMutationGate = gate
         let store = BrowsingHistoryStore(
-            defaults: try makeScratchDefaults(),
             persistence: persistence
         )
 
@@ -311,37 +192,6 @@ final class PersistenceBoundaryTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.threadID), [1])
     }
 
-    @MainActor
-    func testBrowsingHistoryBackgroundClearDeletesLegacyOnlyAfterSuccess() async throws {
-        let defaults = try makeScratchDefaults()
-        let key = "background-clear-history"
-        let legacy = [makeHistoryEntry(id: 7, title: "旧记录", visitedAt: 7)]
-        let data = try JSONEncoder().encode(legacy)
-        let persistence = TestBrowsingHistoryPersistence(values: legacy)
-        let store = BrowsingHistoryStore(
-            defaults: defaults,
-            key: key,
-            persistence: persistence
-        )
-        // Simulate a still-present legacy value after initialization so this
-        // test isolates clear's commit ordering from startup migration.
-        defaults.set(data, forKey: key)
-        persistence.failingMutationOrdinals = [1]
-
-        let failedResult = await store.clearInBackground()
-        XCTAssertFalse(failedResult)
-        XCTAssertEqual(store.items.map(\.threadID), [7])
-        XCTAssertEqual(persistence.values.map(\.threadID), [7])
-        XCTAssertEqual(defaults.data(forKey: key), data)
-
-        let successfulResult = await store.clearInBackground()
-        XCTAssertTrue(successfulResult)
-        XCTAssertTrue(store.items.isEmpty)
-        XCTAssertTrue(persistence.values.isEmpty)
-        XCTAssertNil(defaults.object(forKey: key))
-        XCTAssertEqual(persistence.operations, [.removeAll, .removeAll])
-    }
-
     private func makeThread(id: Int64, title: String) -> ThreadSummary {
         ThreadSummary(
             id: id,
@@ -355,19 +205,6 @@ final class PersistenceBoundaryTests: XCTestCase {
             replyCount: 0,
             viewCount: 0,
             blocks: []
-        )
-    }
-
-    private func makeHistoryEntry(
-        id: Int64,
-        title: String,
-        visitedAt: TimeInterval
-    ) -> BrowsingHistoryEntry {
-        BrowsingHistoryEntry(
-            threadID: id,
-            title: title,
-            authorDisplayName: "作者",
-            visitedAt: Date(timeIntervalSinceReferenceDate: visitedAt)
         )
     }
 }

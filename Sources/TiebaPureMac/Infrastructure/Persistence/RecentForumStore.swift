@@ -4,48 +4,28 @@ import Foundation
 @MainActor
 @Observable
 final class RecentForumStore {
-    static let shared = RecentForumStore()
+    static let shared = RecentForumStore(persistence: AppOrderedCollectionPersistence.recentForums)
 
-    private let key: String
     private let limit: Int
-    private let defaults: UserDefaults
     private let now: () -> Date
     private let persistence: any RecentForumPersistence
     private let persistentBackendIsAvailable: Bool
     private let faultInjector: PersistenceFaultInjector
-    private(set) var items: [RecentForum]
-    private(set) var persistenceAvailability: PersistenceAvailability
+    private(set) var items: [RecentForum] = []
+    private(set) var persistenceAvailability: PersistenceAvailability = .unavailable
 
     init(
-        defaults: UserDefaults = .standard,
-        key: String = "io.github.yamakze.TiebaPureMac.recentForums",
         limit: Int = RecentForumPolicy.maximumStoredEntries,
         persistence: any RecentForumPersistence,
         faultInjector: PersistenceFaultInjector = .none,
         now: @escaping () -> Date = Date.init
     ) {
-        self.defaults = defaults
-        self.key = key
-        let configuredLimit = min(max(limit, 0), RecentForumPolicy.maximumStoredEntries)
-        self.limit = configuredLimit
+        self.limit = min(max(limit, 0), RecentForumPolicy.maximumStoredEntries)
         self.now = now
         self.persistence = persistence
         self.faultInjector = faultInjector
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
-        let snapshot = HistoryStorage.initialSnapshot(
-            capability: persistence.capability,
-            collection: "recent forums",
-            defaults: defaults,
-            legacyKey: key,
-            legacyValue: defaults.data(forKey: key),
-            decodeLegacy: { PersistedArrayDecoder.decode(RecentForum.self, from: $0) },
-            load: persistence.load,
-            replaceAll: persistence.replaceAll,
-            sanitize: { RecentForumPolicy.sanitized($0, limit: configuredLimit) },
-            faultInjector: faultInjector
-        )
-        items = snapshot.items
-        persistenceAvailability = snapshot.availability
+        reload()
     }
 
     /// Returns whether the snapshot was read, including from a non-durable backend.
@@ -110,9 +90,6 @@ final class RecentForumStore {
         }
         do {
             try persistence.replaceAll([])
-            if persistence.capability.isDurable {
-                defaults.removeObject(forKey: key)
-            }
             items = []
             markPersistenceSucceeded()
             return true

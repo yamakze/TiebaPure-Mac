@@ -1,70 +1,51 @@
 import Foundation
 import SwiftData
 
-// Single app-wide SwiftData container shared by every persisted store. Tests
-// build their own container from `models` with an in-memory configuration.
-
 enum AppModelContainer {
     struct Resolution {
         let container: ModelContainer
         let availability: PersistenceAvailability
-
-        var isDurable: Bool {
-            availability.canPersist
-        }
     }
 
-    static let models: [any PersistentModel.Type] = [
-        ThreadFavoriteRecord.self,
-        ThreadReadingPositionRecord.self,
-        BrowsingHistoryRecord.self,
-        RecentForumRecord.self,
-        SearchHistoryRecord.self,
-        ContentDraftRecord.self,
-    ]
+    static let historyModels: [any PersistentModel.Type] = [RecentForumRecord.self, SearchHistoryRecord.self]
+    static let history = openHistory()
+    static let browsingHistory = open("browsing-history.store", models: [BrowsingHistoryRecord.self])
+    static let readingPositions = open("reading-positions.store", models: [ThreadReadingPositionRecord.self])
+    static let contentDrafts = open("drafts.store", models: [ContentDraftRecord.self])
 
-    static let shared: Resolution = {
+    static func openHistory(baseDirectoryURL: URL? = nil) -> Resolution {
+        open("history.store", models: historyModels, baseDirectoryURL: baseDirectoryURL)
+    }
+
+    private static func open(
+        _ fileName: String,
+        models: [any PersistentModel.Type],
+        baseDirectoryURL: URL? = nil
+    ) -> Resolution {
         let schema = Schema(models)
         do {
-            return try resolve(
-                persistent: {
-                    try ModelContainer(
-                        for: schema,
-                        configurations: ModelConfiguration(schema: schema)
-                    )
-                },
-                fallback: {
-                    try ModelContainer(
-                        for: schema,
-                        configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                    )
-                }
+            let directory = try SecurePersistenceLocation.applicationSupport(baseDirectoryURL: baseDirectoryURL).directoryURL
+            let configuration = ModelConfiguration(
+                schema: schema,
+                url: directory.appendingPathComponent(fileName),
+                cloudKitDatabase: .none
             )
+            let container = try ModelContainer(for: schema, configurations: configuration)
+            return Resolution(container: container, availability: .available)
         } catch {
-            fatalError("ModelContainer creation failed: \(error)")
+            PersistenceDiagnostics.report(error, operation: "open \(fileName)")
         }
-    }()
-
-    /// Resolves a durable container first and degrades to an in-memory
-    /// container only when opening the on-disk store fails. The durability bit
-    /// is kept alongside the container so a fallback session can import legacy
-    /// values for display without deleting their only durable copy.
-    static func resolve(
-        persistent: () throws -> ModelContainer,
-        fallback: () throws -> ModelContainer
-    ) throws -> Resolution {
         do {
-            return Resolution(container: try persistent(), availability: .available)
+            let container = try ModelContainer(
+                for: schema,
+                configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            )
+            return Resolution(container: container, availability: .unavailable)
         } catch {
-            PersistenceDiagnostics.report(error, operation: "open persistent model container")
-            return Resolution(container: try fallback(), availability: .unavailable)
+            fatalError("In-memory ModelContainer creation failed for \(fileName): \(error)")
         }
     }
 }
-
-// Each store persists a full snapshot of its in-memory array; sortIndex
-// preserves the array order across relaunches exactly as the legacy JSON
-// encoding did.
 
 protocol OrderedPersistentRecord: PersistentModel {
     var sortIndex: Int { get set }
@@ -200,27 +181,6 @@ enum PersistedRecordStore {
         try save(context)
     }
 
-    static func clearThreadLibrary(
-        in context: ModelContext,
-        beforeSave: () throws -> Void = {}
-    ) throws {
-        do {
-            let favorites = try context.fetch(FetchDescriptor<ThreadFavoriteRecord>())
-            let positions = try context.fetch(FetchDescriptor<ThreadReadingPositionRecord>())
-            for favorite in favorites {
-                context.delete(favorite)
-            }
-            for position in positions {
-                context.delete(position)
-            }
-            try beforeSave()
-            try save(context)
-        } catch {
-            context.rollback()
-            throw error
-        }
-    }
-
     private static func save(_ context: ModelContext) throws {
         do {
             try context.save()
@@ -230,41 +190,6 @@ enum PersistedRecordStore {
         }
     }
 }
-
-/// Retired: thread collections live on the Baidu account now. The model stays
-/// in the schema so stores written by older versions still open, and its rows
-/// are deleted on first launch.
-
-@Model
-final class ThreadFavoriteRecord {
-    var threadID: Int64
-    var forumID: Int64?
-    var title: String
-    var authorDisplayName: String
-    var forumDisplayName: String?
-    var savedAt: Date
-    var sortIndex: Int
-
-    init(
-        threadID: Int64 = 0,
-        forumID: Int64? = nil,
-        title: String = "",
-        authorDisplayName: String = "",
-        forumDisplayName: String? = nil,
-        savedAt: Date = .distantPast,
-        sortIndex: Int = 0
-    ) {
-        self.threadID = threadID
-        self.forumID = forumID
-        self.title = title
-        self.authorDisplayName = authorDisplayName
-        self.forumDisplayName = forumDisplayName
-        self.savedAt = savedAt
-        self.sortIndex = sortIndex
-    }
-}
-
-extension ThreadFavoriteRecord: OrderedPersistentRecord {}
 
 @Model
 final class ThreadReadingPositionRecord {

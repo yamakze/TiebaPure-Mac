@@ -78,8 +78,8 @@ final class MacSession {
                 accountStore: AccountStore(service: MemoryAccountStoreService()),
                 artifactCleaner: ScreenshotSessionCleaner()
             )
-            recentForums = RecentForumStore(key: "fixture.recentForums", persistence: ScreenshotHistory<RecentForum>())
-            searchHistory = SearchHistoryStore(key: "fixture.searchHistory", persistence: ScreenshotHistory<String>())
+            recentForums = RecentForumStore(persistence: ScreenshotHistory<RecentForum>())
+            searchHistory = SearchHistoryStore(persistence: ScreenshotHistory<String>())
             forumSort = ForumThreadSortPreferenceStore(key: "fixture.forum-thread-sort")
             forumSort.reset()
             recentForums.save(FixtureTiebaAPI.forum)

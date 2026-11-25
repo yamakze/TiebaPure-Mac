@@ -17,9 +17,6 @@ enum PersistenceCapability: Equatable, Sendable {
         self == .durable
     }
 
-    var isDurable: Bool {
-        self == .durable
-    }
 }
 
 @MainActor

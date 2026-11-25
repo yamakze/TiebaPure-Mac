@@ -9,10 +9,8 @@ private enum BrowsingHistoryMutation: Sendable {
 
 @MainActor
 final class BrowsingHistoryStore: ObservableObject {
-    static let shared = BrowsingHistoryStore()
+    static let shared = BrowsingHistoryStore(persistence: AppOrderedCollectionPersistence.browsingHistory)
 
-    private let defaults: UserDefaults
-    private let key: String
     private let limit: Int
     private let now: () -> Date
     private let persistence: any BrowsingHistoryPersistence
@@ -21,39 +19,21 @@ final class BrowsingHistoryStore: ObservableObject {
     private var mutationTail: Task<Bool, Never>?
     private var mutationTailID: UUID?
     private var pendingMutationCount = 0
-    @Published private(set) var items: [BrowsingHistoryEntry]
-    @Published private(set) var persistenceAvailability: PersistenceAvailability
+    @Published private(set) var items: [BrowsingHistoryEntry] = []
+    @Published private(set) var persistenceAvailability: PersistenceAvailability = .unavailable
 
     init(
-        defaults: UserDefaults = .standard,
-        key: String = "io.github.yamakze.TiebaPureMac.browsingHistory",
         limit: Int = BrowsingHistoryPolicy.maximumStoredEntries,
         persistence: any BrowsingHistoryPersistence,
         faultInjector: PersistenceFaultInjector = .none,
         now: @escaping () -> Date = Date.init
     ) {
-        self.defaults = defaults
-        self.key = key
-        let configuredLimit = min(max(limit, 0), BrowsingHistoryPolicy.maximumStoredEntries)
-        self.limit = configuredLimit
+        self.limit = min(max(limit, 0), BrowsingHistoryPolicy.maximumStoredEntries)
         self.now = now
         self.persistence = persistence
         self.faultInjector = faultInjector
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
-        let snapshot = HistoryStorage.initialSnapshot(
-            capability: persistence.capability,
-            collection: "browsing history",
-            defaults: defaults,
-            legacyKey: key,
-            legacyValue: defaults.data(forKey: key),
-            decodeLegacy: { PersistedArrayDecoder.decode(BrowsingHistoryEntry.self, from: $0) },
-            load: persistence.load,
-            replaceAll: persistence.replaceAll,
-            sanitize: { BrowsingHistoryPolicy.sanitized($0, limit: configuredLimit) },
-            faultInjector: faultInjector
-        )
-        items = snapshot.items
-        persistenceAvailability = snapshot.availability
+        reload()
     }
 
     @discardableResult
@@ -161,9 +141,6 @@ final class BrowsingHistoryStore: ObservableObject {
         }
         do {
             try persistence.replaceAll([])
-            if persistence.capability.isDurable {
-                defaults.removeObject(forKey: key)
-            }
             items = []
             markPersistenceSucceeded()
             return true
@@ -178,8 +155,7 @@ final class BrowsingHistoryStore: ObservableObject {
     func clearInBackground() async -> Bool {
         await enqueueMutation(
             .deleteAll,
-            operation: "clear browsing history",
-            removesLegacyValueOnSuccess: true
+            operation: "clear browsing history"
         ).value
     }
 
@@ -212,8 +188,7 @@ final class BrowsingHistoryStore: ObservableObject {
 
     private func enqueueMutation(
         _ mutation: BrowsingHistoryMutation,
-        operation: String,
-        removesLegacyValueOnSuccess: Bool = false
+        operation: String
     ) -> Task<Bool, Never> {
         guard persistentBackendIsAvailable else {
             persistenceAvailability = .unavailable
@@ -246,9 +221,6 @@ final class BrowsingHistoryStore: ObservableObject {
                     self.items = try await self.persistence.remove(threadIDs: threadIDs)
                 case .deleteAll:
                     self.items = try await self.persistence.removeAll()
-                }
-                if removesLegacyValueOnSuccess, self.persistence.capability.isDurable {
-                    self.defaults.removeObject(forKey: self.key)
                 }
                 self.markPersistenceSucceeded()
                 return true

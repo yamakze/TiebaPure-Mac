@@ -147,7 +147,6 @@ protocol ThreadReadingPositionPersistence: AnyObject {
     func upsert(_ position: ThreadReadingPosition, limit: Int) throws
     func remove(threadID: Int64) throws
     func removeAll(beforeCommit: () throws -> Void) throws
-    func clearAll(beforeCommit: () throws -> Void) throws
 
     func upsertInBackground(
         _ position: ThreadReadingPosition,
@@ -164,10 +163,6 @@ extension ThreadReadingPositionPersistence {
 
     func removeAll() throws {
         try removeAll(beforeCommit: {})
-    }
-
-    func clearAll() throws {
-        try clearAll(beforeCommit: {})
     }
 
     func upsertInBackground(
@@ -251,13 +246,6 @@ final class SwiftDataThreadReadingPositionPersistence:
         try replaceAll([], beforeCommit: beforeCommit)
     }
 
-    func clearAll(beforeCommit: () throws -> Void) throws {
-        try PersistedRecordStore.clearThreadLibrary(
-            in: modelContext,
-            beforeSave: beforeCommit
-        )
-    }
-
     func upsertInBackground(
         _ position: ThreadReadingPosition,
         limit: Int
@@ -276,27 +264,15 @@ final class SwiftDataThreadReadingPositionPersistence:
         return try await databaseActor.apply(.deleteAll)
     }
 
-    func purgeRetiredFavorites() {
-        guard capability.acceptsUserMutations else { return }
-        do {
-            try PersistedRecordStore.replaceAll(
-                ThreadFavoriteRecord.self,
-                with: [],
-                in: modelContext
-            )
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "purge retired thread favorites")
-        }
-    }
 }
 
 @MainActor
 final class LocalThreadLibraryStore: ObservableObject {
-    static let shared = LocalThreadLibraryStore()
+    static let shared = LocalThreadLibraryStore(persistence: SwiftDataThreadReadingPositionPersistence(
+        modelContainer: AppModelContainer.readingPositions.container,
+        persistenceAvailability: AppModelContainer.readingPositions.availability
+    ))
 
-    private let defaults: UserDefaults
-    private let favoritesKey: String
-    private let readingPositionsKey: String
     private let readingPositionLimit: Int
     private let now: () -> Date
     private let persistence: any ThreadReadingPositionPersistence
@@ -306,21 +282,15 @@ final class LocalThreadLibraryStore: ObservableObject {
     private var readingPositionMutationTailID: UUID?
     private var pendingReadingPositionMutationCount = 0
 
-    @Published private(set) var readingPositions: [ThreadReadingPosition]
+    @Published private(set) var readingPositions: [ThreadReadingPosition] = []
     @Published private(set) var persistenceAvailability: PersistenceAvailability
 
     init(
-        defaults: UserDefaults = .standard,
-        favoritesKey: String = "io.github.yamakze.TiebaPureMac.threadFavorites",
-        readingPositionsKey: String = "io.github.yamakze.TiebaPureMac.threadReadingPositions",
         readingPositionLimit: Int = LocalThreadLibraryPolicy.maximumReadingPositions,
         persistence: any ThreadReadingPositionPersistence,
         faultInjector: PersistenceFaultInjector = .none,
         now: @escaping () -> Date = Date.init
     ) {
-        self.defaults = defaults
-        self.favoritesKey = favoritesKey
-        self.readingPositionsKey = readingPositionsKey
         self.readingPositionLimit = min(
             max(readingPositionLimit, 0),
             LocalThreadLibraryPolicy.maximumReadingPositions
@@ -330,59 +300,23 @@ final class LocalThreadLibraryStore: ObservableObject {
         self.faultInjector = faultInjector
         persistentBackendIsAvailable = persistence.capability.acceptsUserMutations
         persistenceAvailability = persistence.capability.availability
-        var legacyPositionsFallback: [ThreadReadingPosition]?
-        var legacyPositionsMigrationFailed = false
-        do {
-            try Self.migrateLegacyReadingPositions(
-                defaults: defaults,
-                key: readingPositionsKey,
-                persistence: persistence,
-                limit: self.readingPositionLimit,
-                legacyFallback: &legacyPositionsFallback,
-                faultInjector: faultInjector
-            )
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "migrate reading positions")
-            self.persistenceAvailability = .unavailable
-            legacyPositionsMigrationFailed = true
-        }
-        var loadedReadingPositions: [ThreadReadingPosition]
-        do {
-            let result = try Self.loadAndRepairReadingPositions(
-                persistence: persistence,
-                limit: self.readingPositionLimit,
-                canRepair: persistentBackendIsAvailable,
-                faultInjector: faultInjector
-            )
-            loadedReadingPositions = result.value
-            if let error = result.repairError {
-                PersistenceDiagnostics.report(error, operation: "repair reading positions")
-                self.persistenceAvailability = .unavailable
-            }
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "load reading positions")
-            loadedReadingPositions = legacyPositionsMigrationFailed ? (legacyPositionsFallback ?? []) : []
-            self.persistenceAvailability = .unavailable
-        }
-        if legacyPositionsMigrationFailed, loadedReadingPositions.isEmpty,
-           let legacyPositionsFallback {
-            loadedReadingPositions = legacyPositionsFallback
-        }
-        readingPositions = loadedReadingPositions
-        // Collections live on the Baidu account now. Keep only the historical
-        // SwiftData schema compatibility; no local-favorite API is restored.
-        defaults.removeObject(forKey: favoritesKey)
+        reload()
     }
 
     @discardableResult
     func reload() -> Bool {
+        guard persistence.capability.canAccessBackend else {
+            persistenceAvailability = .unavailable
+            return false
+        }
         guard pendingReadingPositionMutationCount == 0 else { return false }
         var succeeded = true
         do {
-            let result = try Self.loadAndRepairReadingPositions(
-                persistence: persistence,
-                limit: readingPositionLimit,
+            let result = try HistoryStorage.repair(
+                try persistence.load(),
                 canRepair: persistentBackendIsAvailable,
+                replaceAll: persistence.replaceAll,
+                sanitize: { LocalThreadLibraryPolicy.sanitizedReadingPositions($0, limit: readingPositionLimit) },
                 faultInjector: faultInjector
             )
             readingPositions = result.value
@@ -466,8 +400,7 @@ final class LocalThreadLibraryStore: ObservableObject {
     func enqueueClearReadingPositions() -> Task<Bool, Never> {
         enqueueReadingPositionMutation(
             .deleteAll,
-            operation: "clear reading positions",
-            removesLegacyValueOnSuccess: true
+            operation: "clear reading positions"
         )
     }
 
@@ -541,7 +474,6 @@ final class LocalThreadLibraryStore: ObservableObject {
         }
         do {
             try persistence.removeAll()
-            defaults.removeObject(forKey: readingPositionsKey)
             readingPositions = []
             markPersistenceSucceeded()
             return true
@@ -552,32 +484,9 @@ final class LocalThreadLibraryStore: ObservableObject {
         }
     }
 
-    @discardableResult
-    func clearAll() -> Bool {
-        guard pendingReadingPositionMutationCount == 0 else { return false }
-        guard persistentBackendIsAvailable else {
-            persistenceAvailability = .unavailable
-            return false
-        }
-        do {
-            try persistence.clearAll {
-                try faultInjector.check(.clearAll)
-            }
-            defaults.removeObject(forKey: readingPositionsKey)
-            readingPositions = []
-            markPersistenceSucceeded()
-            return true
-        } catch {
-            PersistenceDiagnostics.report(error, operation: "clear local thread library")
-            persistenceAvailability = .unavailable
-            return false
-        }
-    }
-
     private func enqueueReadingPositionMutation(
         _ mutation: ThreadReadingPositionDatabaseMutation,
-        operation: String,
-        removesLegacyValueOnSuccess: Bool = false
+        operation: String
     ) -> Task<Bool, Never> {
         guard persistentBackendIsAvailable else {
             persistenceAvailability = .unavailable
@@ -621,9 +530,6 @@ final class LocalThreadLibraryStore: ObservableObject {
                     persisted = try await self.persistence.removeAllInBackground()
                 }
                 self.readingPositions = persisted
-                if removesLegacyValueOnSuccess {
-                    self.defaults.removeObject(forKey: self.readingPositionsKey)
-                }
                 self.markPersistenceSucceeded()
                 return true
             } catch {
@@ -643,130 +549,5 @@ final class LocalThreadLibraryStore: ObservableObject {
     private func markPersistenceSucceeded() {
         guard persistentBackendIsAvailable else { return }
         persistenceAvailability = .available
-    }
-
-    private static func loadAndRepairReadingPositions(
-        persistence: any ThreadReadingPositionPersistence,
-        limit: Int,
-        canRepair: Bool,
-        faultInjector: PersistenceFaultInjector = .none
-    ) throws -> PersistenceLoadResult<[ThreadReadingPosition]> {
-        let raw = try persistence.load()
-        let sanitized = LocalThreadLibraryPolicy.sanitizedReadingPositions(
-            raw,
-            limit: limit
-        )
-        if canRepair, raw != sanitized {
-            do {
-                try persistence.replaceAll(sanitized) {
-                    try faultInjector.check(.repair)
-                }
-            } catch {
-                return PersistenceLoadResult(value: sanitized, repairError: error)
-            }
-        }
-        return PersistenceLoadResult(value: sanitized, repairError: nil)
-    }
-
-    // One-time import of the pre-SwiftData UserDefaults JSON blob.
-    private static func migrateLegacyReadingPositions(
-        defaults: UserDefaults,
-        key: String,
-        persistence: any ThreadReadingPositionPersistence,
-        limit: Int,
-        legacyFallback: inout [ThreadReadingPosition]?,
-        faultInjector: PersistenceFaultInjector
-    ) throws {
-        guard let data = defaults.data(forKey: key) else { return }
-        let existing: [ThreadReadingPosition]
-        do {
-            existing = try persistence.load()
-        } catch {
-            if let decoded = PersistedArrayDecoder.decode(
-                ThreadReadingPosition.self,
-                from: data
-            ) {
-                legacyFallback = LocalThreadLibraryPolicy.sanitizedReadingPositions(
-                    decoded,
-                    limit: limit
-                )
-            }
-            throw error
-        }
-        let source: [ThreadReadingPosition]
-        if existing.isEmpty {
-            guard let decoded = PersistedArrayDecoder.decode(
-                ThreadReadingPosition.self,
-                from: data
-            ) else {
-                throw LegacyStorageMigration.DecodeError.invalidTopLevelArray
-            }
-            source = LocalThreadLibraryPolicy.sanitizedReadingPositions(decoded, limit: limit)
-            legacyFallback = source
-        } else {
-            source = existing
-        }
-        let sanitized = LocalThreadLibraryPolicy.sanitizedReadingPositions(source, limit: limit)
-        try LegacyStorageMigration.persistThenRemoveLegacyValue(
-            defaults: defaults,
-            key: key,
-            destinationIsDurable: persistence.capability.isDurable
-        ) {
-            try persistence.replaceAll(sanitized) {
-                try faultInjector.check(.legacyMigration)
-            }
-        }
-    }
-}
-
-extension LocalThreadLibraryStore {
-    convenience init(
-        defaults: UserDefaults = .standard,
-        favoritesKey: String = "io.github.yamakze.TiebaPureMac.threadFavorites",
-        readingPositionsKey: String = "io.github.yamakze.TiebaPureMac.threadReadingPositions",
-        readingPositionLimit: Int = LocalThreadLibraryPolicy.maximumReadingPositions,
-        faultInjector: PersistenceFaultInjector = .none,
-        now: @escaping () -> Date = Date.init
-    ) {
-        self.init(
-            defaults: defaults,
-            favoritesKey: favoritesKey,
-            readingPositionsKey: readingPositionsKey,
-            readingPositionLimit: readingPositionLimit,
-            persistence: SwiftDataThreadReadingPositionPersistence(
-                modelContainer: AppModelContainer.shared.container,
-                persistenceAvailability: AppModelContainer.shared.availability
-            ),
-            faultInjector: faultInjector,
-            now: now
-        )
-    }
-}
-
-extension LocalThreadLibraryStore {
-    convenience init(
-        defaults: UserDefaults = .standard,
-        favoritesKey: String = "io.github.yamakze.TiebaPureMac.threadFavorites",
-        readingPositionsKey: String = "io.github.yamakze.TiebaPureMac.threadReadingPositions",
-        readingPositionLimit: Int = LocalThreadLibraryPolicy.maximumReadingPositions,
-        modelContainer: ModelContainer,
-        persistenceAvailability: PersistenceAvailability? = nil,
-        faultInjector: PersistenceFaultInjector = .none,
-        now: @escaping () -> Date = Date.init
-    ) {
-        let persistence = SwiftDataThreadReadingPositionPersistence(
-            modelContainer: modelContainer,
-            persistenceAvailability: persistenceAvailability
-        )
-        self.init(
-            defaults: defaults,
-            favoritesKey: favoritesKey,
-            readingPositionsKey: readingPositionsKey,
-            readingPositionLimit: readingPositionLimit,
-            persistence: persistence,
-            faultInjector: faultInjector,
-            now: now
-        )
-        persistence.purgeRetiredFavorites()
     }
 }

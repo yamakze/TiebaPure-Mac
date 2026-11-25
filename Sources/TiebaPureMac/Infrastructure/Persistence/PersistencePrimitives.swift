@@ -11,9 +11,7 @@ enum PersistenceAvailability: Equatable, Sendable {
 }
 
 enum PersistenceFaultPoint: Equatable {
-    case legacyMigration
     case repair
-    case clearAll
 }
 
 struct PersistenceFaultInjector {
@@ -43,23 +41,6 @@ enum PersistenceDiagnostics {
 
     static func report(_ error: Error, operation: String) {
         logger.error("\(operation, privacy: .public) failed: \(String(describing: error), privacy: .public)")
-    }
-}
-
-enum LegacyStorageMigration {
-    enum DecodeError: Error {
-        case invalidTopLevelArray
-    }
-
-    static func persistThenRemoveLegacyValue(
-        defaults: UserDefaults,
-        key: String,
-        destinationIsDurable: Bool,
-        persist: () throws -> Void
-    ) throws {
-        try persist()
-        guard destinationIsDurable else { return }
-        defaults.removeObject(forKey: key)
     }
 }
 

@@ -565,8 +565,8 @@ final class ContentDraftStore {
 
     convenience init() {
         self.init(persistence: SwiftDataContentDraftPersistenceBackend(
-            modelContainer: AppModelContainer.shared.container,
-            persistenceAvailability: AppModelContainer.shared.availability
+            modelContainer: AppModelContainer.contentDrafts.container,
+            persistenceAvailability: AppModelContainer.contentDrafts.availability
         ))
     }
 
