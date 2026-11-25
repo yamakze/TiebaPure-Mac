@@ -5,17 +5,23 @@ struct ReaderScrollView<ID: Hashable, Content: View>: View {
     @Binding private var position: ID?
     @State private var initialPosition: ID?
     @State private var didRestorePosition = false
+    private let contentWidth: CGFloat
     private let content: Content
 
-    init(position: Binding<ID?>, @ViewBuilder content: () -> Content) {
+    init(position: Binding<ID?>, contentWidth: CGFloat = .infinity, @ViewBuilder content: () -> Content) {
         _position = position
         _initialPosition = State(initialValue: position.wrappedValue)
+        self.contentWidth = contentWidth
         self.content = content()
     }
 
     var body: some View {
         ScrollViewReader { scroll in
-            ScrollView { content }
+            ScrollView {
+                VStack(spacing: 0) { content }
+                    .frame(maxWidth: contentWidth)
+                    .frame(maxWidth: .infinity)
+            }
                 .scrollPosition(id: Binding(
                     get: { position },
                     set: { if didRestorePosition, let visible = $0 { position = visible } }

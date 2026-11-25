@@ -69,7 +69,7 @@ struct MacImagePreview: View {
                                 thumbnail: index == selection.index ? selection.thumbnail : nil)
                 .id(index)
         }
-        .frame(minWidth: 640, idealWidth: 820, minHeight: 420, idealHeight: 570)
+        .frame(minWidth: 880, idealWidth: 1040, minHeight: 540, idealHeight: 680)
     }
 
     private func select(_ next: Int) {

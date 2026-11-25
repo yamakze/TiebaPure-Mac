@@ -9,6 +9,7 @@ struct MacReaderSectionView: View {
 
     @State private var searchPresented = false
 
+    private let listContentWidth: CGFloat = 824
     private var section: ReaderSection { state.section }
 
     var body: some View {
@@ -134,7 +135,7 @@ struct MacReaderSectionView: View {
                     ContentUnavailableView(title, systemImage: section.icon)
                 }
             } else {
-                ReaderScrollView(position: $state.listPosition) {
+                ReaderScrollView(position: $state.listPosition, contentWidth: listContentWidth) {
                     LazyVStack(spacing: 0) {
                         ForEach(state.pages.items) { destination in
                             VStack(spacing: 0) {
@@ -164,7 +165,6 @@ struct MacReaderSectionView: View {
                 }
                 .contentMargins(.horizontal, 24, for: .scrollContent)
                 .accessibilityIdentifier("reader-thread-list")
-                .frame(maxWidth: 872)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -181,7 +181,7 @@ struct MacReaderSectionView: View {
             if state.followed.items.isEmpty && state.followed.request == nil && state.followed.error == nil {
                 ContentUnavailableView("暂无关注的吧", systemImage: ReaderSection.followedForums.icon)
             } else {
-                ReaderScrollView(position: $state.followedPosition) {
+                ReaderScrollView(position: $state.followedPosition, contentWidth: listContentWidth) {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
                         ForEach(state.followed.items) { forum in
                             Button { openFollowedForum(forum) } label: {
@@ -223,7 +223,6 @@ struct MacReaderSectionView: View {
                                      loadNext: {}, retry: { state.followed.retry() })
                 }
                 .contentMargins(24, for: .scrollContent)
-                .frame(maxWidth: 872)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

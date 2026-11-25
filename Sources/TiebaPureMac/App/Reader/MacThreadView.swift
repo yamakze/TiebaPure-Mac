@@ -63,7 +63,7 @@ struct MacThreadView: View {
     }
 
     private var floors: some View {
-        ReaderScrollView(position: $reading.scrollPosition) {
+        ReaderScrollView(position: $reading.scrollPosition, contentWidth: 812) {
             LazyVStack(alignment: .leading, spacing: 0) {
                 Text(reading.header?.title ?? thread.title)
                     .font(.title2.bold())
@@ -84,8 +84,6 @@ struct MacThreadView: View {
         }
         .contentMargins(24, for: .scrollContent)
         .accessibilityIdentifier("thread-floors")
-        .frame(maxWidth: 860)
-        .frame(maxWidth: .infinity)
     }
 
     private func floor(_ post: Post, authorID: Int64?) -> some View {
