@@ -13,7 +13,7 @@ final class SocialRelationshipStateTests: XCTestCase {
         XCTAssertEqual(state.forumFollowState(accountID: "account-a", forum: unresolved), true)
         XCTAssertEqual(state.forumFollowState(accountID: "account-a", forum: resolved), true)
         XCTAssertNil(state.forumFollowState(accountID: "account-b", forum: resolved))
-        XCTAssertTrue(SocialRelationshipState.sameForum(unresolved, resolved))
+        XCTAssertTrue(unresolved.refers(to: resolved))
     }
 
     func testUserStateMatchesIDAndPortraitAliasesAndCanBeResetPerAccount() {
@@ -380,11 +380,11 @@ final class SocialRelationshipStateTests: XCTestCase {
         try await mutation.value
     }
 
-    func testTwoPhaseBarrierRejectsContentWriteWhileSocialDrainIsBlocked() async throws {
+    func testTwoPhaseBarrierRejectsAccountWriteWhileSocialDrainIsBlocked() async throws {
         let state = SocialRelationshipState()
         let api = ControlledSocialMutationAPI()
         let socialCoordinator = SocialMutationCoordinator(api: api, state: state)
-        let contentCoordinator = ContentSubmissionCoordinator(api: api)
+        let accountWrites = AccountWriteCoordinator(api: api)
         let account = makeAccount(credential: "two-phase")
         let user = makeUser(id: 99)
         let mutation = Task {
@@ -397,19 +397,19 @@ final class SocialRelationshipStateTests: XCTestCase {
         await api.waitForFirstUserMutation()
 
         socialCoordinator.establishInvalidationBarrier()
-        contentCoordinator.establishInvalidationBarrier()
+        accountWrites.establishInvalidationBarrier()
         let socialDrain = Task { @MainActor in
             await socialCoordinator.drainInvalidatedOperations()
         }
         let contentDrain = Task { @MainActor in
-            await contentCoordinator.drainInvalidatedOperations()
+            await accountWrites.drainInvalidatedOperations()
         }
         await Task.yield()
 
         XCTAssertTrue(socialCoordinator.isInvalidating(session: account.sessionIdentity))
-        XCTAssertTrue(contentCoordinator.isInvalidating(accountID: account.id))
+        XCTAssertTrue(accountWrites.isInvalidating(accountID: account.id))
         do {
-            try await contentCoordinator.performAccountWrite(
+            try await accountWrites.performAccountWrite(
                 account: account,
                 target: .profile
             ) {
@@ -417,7 +417,7 @@ final class SocialRelationshipStateTests: XCTestCase {
             }
             XCTFail("社交排空仍被阻塞时，内容写入口也必须已经关闭")
         } catch {
-            XCTAssertEqual(error as? ContentSubmissionCoordinatorError, .sessionTransition)
+            XCTAssertEqual(error as? AccountWriteError, .sessionTransition)
         }
 
         await api.releaseFirstUserMutation()
@@ -429,7 +429,7 @@ final class SocialRelationshipStateTests: XCTestCase {
         } catch {
             XCTAssertTrue(error is CancellationError)
         }
-        contentCoordinator.endInvalidation()
+        accountWrites.endInvalidation()
         socialCoordinator.endInvalidation()
     }
 

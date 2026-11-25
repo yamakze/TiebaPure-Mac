@@ -101,13 +101,13 @@ final class SocialRelationshipState {
         var result = loaded
         for change in uniqueForumOverrides(accountID: accountID) {
             if change.isFollowed {
-                if let index = result.firstIndex(where: { Self.sameForum($0, change.forum) }) {
+                if let index = result.firstIndex(where: { $0.refers(to: change.forum) }) {
                     result[index] = change.forum
                 } else {
                     result.insert(change.forum, at: 0)
                 }
             } else {
-                result.removeAll { Self.sameForum($0, change.forum) }
+                result.removeAll { $0.refers(to: change.forum) }
             }
         }
         return deduplicatedForums(result)
@@ -221,13 +221,6 @@ final class SocialRelationshipState {
         return fallbackUserNameKey(lhs) == fallbackUserNameKey(rhs)
     }
 
-    static func sameForum(_ lhs: Forum, _ rhs: Forum) -> Bool {
-        if lhs.id > 0, rhs.id > 0 { return lhs.id == rhs.id }
-        let lhsName = normalized(lhs.name)
-        let rhsName = normalized(rhs.name)
-        return lhsName.isEmpty == false && lhsName == rhsName
-    }
-
     static func userOperationKey(_ user: UserSummary) -> String {
         userKeys(user).first ?? "unknown-user"
     }
@@ -272,7 +265,7 @@ final class SocialRelationshipState {
 
     private func deduplicatedForums(_ forums: [Forum]) -> [Forum] {
         var result: [Forum] = []
-        for forum in forums where result.contains(where: { Self.sameForum($0, forum) }) == false {
+        for forum in forums where result.contains(where: { $0.refers(to: forum) }) == false {
             result.append(forum)
         }
         return result

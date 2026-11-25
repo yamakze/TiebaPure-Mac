@@ -1,5 +1,4 @@
 import Foundation
-import WebKit
 
 @MainActor
 protocol SessionArtifactCleaning {
@@ -9,31 +8,11 @@ protocol SessionArtifactCleaning {
 struct LiveSessionArtifactCleaner: SessionArtifactCleaning {
     func clear() async throws {
         try Task.checkCancellation()
-        clearFoundationCookies()
-        URLCache.shared.removeAllCachedResponses()
-        try await clearLegacyBaiduWebKitData()
-        try Task.checkCancellation()
-    }
+        // The login window uses a nonpersistent WebKit data store.
 
-    private func clearFoundationCookies() {
         HTTPCookieStorage.shared.cookies?
             .filter { Self.isBaiduDomain($0.domain) }
             .forEach(HTTPCookieStorage.shared.deleteCookie)
-    }
-
-    private func clearLegacyBaiduWebKitData() async throws {
-        let store = WKWebsiteDataStore.default()
-        let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        let records = await withCheckedContinuation { continuation in
-            store.fetchDataRecords(ofTypes: types) { continuation.resume(returning: $0) }
-        }
-        let baiduRecords = records.filter { Self.isBaiduDomain($0.displayName) }
-        guard baiduRecords.isEmpty == false else { return }
-        await withCheckedContinuation { continuation in
-            store.removeData(ofTypes: types, for: baiduRecords) {
-                continuation.resume()
-            }
-        }
     }
 
     private static func isBaiduDomain(_ value: String) -> Bool {
@@ -59,19 +38,6 @@ final class LogoutCoordinator {
         self.artifactCleaner = artifactCleaner
         self.beginWriteInvalidation = beginWriteInvalidation
         self.endWriteInvalidation = endWriteInvalidation
-    }
-
-    convenience init(
-        accountStore: AccountStore,
-        beginWriteInvalidation: @escaping @MainActor () async -> Void = {},
-        endWriteInvalidation: @escaping @MainActor () -> Void = {}
-    ) {
-        self.init(
-            accountStore: accountStore,
-            artifactCleaner: LiveSessionArtifactCleaner(),
-            beginWriteInvalidation: beginWriteInvalidation,
-            endWriteInvalidation: endWriteInvalidation
-        )
     }
 
     /// AccountStore publishes the signed-out state only after every other

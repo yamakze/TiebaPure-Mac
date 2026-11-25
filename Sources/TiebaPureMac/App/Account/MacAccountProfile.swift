@@ -18,7 +18,7 @@ struct MacAccountAvatar: View {
 }
 
 struct MacAccountProfile: View {
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     let account: Account
     @State private var profile: UserProfile?
     @State private var error: String?

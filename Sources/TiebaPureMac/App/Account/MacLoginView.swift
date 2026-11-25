@@ -6,7 +6,7 @@ struct MacLoginView: View {
         let needsFreshWebSession: Bool
     }
 
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var validationTask: Task<Void, Never>?
     @State private var failure: Failure?

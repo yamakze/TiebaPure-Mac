@@ -1,16 +1,21 @@
 import SwiftUI
 
 struct MacReaderSectionView: View {
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     @Bindable var state: MacReaderSectionState
-    let recentForums: RecentForumStore
-    let searchHistory: SearchHistoryStore
     let openFollowedForum: (Forum) -> Void
+
+    private struct ForumFollowIdentity: Hashable {
+        let session: AccountSessionIdentity
+        let name: String
+    }
 
     @State private var searchPresented = false
 
     private let listContentWidth: CGFloat = 824
     private var section: ReaderSection { state.section }
+    private var recentForums: RecentForumStore { session.recentForums }
+    private var searchHistory: SearchHistoryStore { session.searchHistory }
 
     var body: some View {
         Group {
@@ -28,6 +33,11 @@ struct MacReaderSectionView: View {
             } else {
                 sectionContent
             }
+        }
+        .onAppear {
+            guard session.account != nil else { return }
+            if section == .favorites { state.pages.loadInitialPage() }
+            if section == .followedForums { state.followed.loadInitialPage() }
         }
         .task(id: state.pages.request) { [request = state.pages.request] in
             if let request { await loadThreads(request) }
@@ -104,8 +114,7 @@ struct MacReaderSectionView: View {
                 if let forum = state.forum, let account = session.account {
                     ToolbarItem(placement: .primaryAction) {
                         MacForumFollowButton(forum: forum, account: account)
-                            .id(account.sessionIdentity)
-                            .id(forum.name)
+                            .id(ForumFollowIdentity(session: account.sessionIdentity, name: forum.name))
                     }
                 }
             }

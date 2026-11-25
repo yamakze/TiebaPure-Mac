@@ -1,10 +1,22 @@
+import AppKit
 import SwiftUI
 
 @main
 struct TiebaPureMacApp: App {
     @NSApplicationDelegateAdaptor(MacApplicationDelegate.self) private var applicationDelegate
-    @StateObject private var session = MacSession()
+    @State private var session: MacSession
     @StateObject private var appearance = AppAppearanceStore.live()
+
+    init() {
+        let screen = NSScreen.main
+        let scale = screen?.backingScaleFactor ?? 1
+        let size = screen?.frame.size ?? CGSize(width: 1440, height: 900)
+        _session = State(initialValue: MacSession(requestBuilder: .live(
+            screenScale: scale,
+            screenWidth: Int(size.width * scale),
+            screenHeight: Int(size.height * scale)
+        )))
+    }
 
     private var selectedAppearance: Binding<AppAppearance> {
         Binding(get: { appearance.selection }, set: { appearance.select($0) })
@@ -14,11 +26,11 @@ struct TiebaPureMacApp: App {
         WindowGroup("TiebaPure-Mac", id: "reader") {
             Group {
                 if session.isReady {
-                    MacReaderView(recentForums: session.recentForums, searchHistory: session.searchHistory)
+                    MacReaderView()
                 }
                 else { ProgressView() }
             }
-                .environmentObject(session)
+                .environment(session)
                 .preferredColorScheme(appearance.selection.preferredColorScheme)
                 .frame(minWidth: 960, minHeight: 640)
                 .task { await session.load() }
@@ -38,7 +50,9 @@ struct TiebaPureMacApp: App {
                 }
                 MacUpdateSettings(updater: applicationDelegate.updater)
                 Section("关于") {
-                    LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "开发构建")
+                    if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+                        LabeledContent("版本", value: version)
+                    }
                     if let url = MacReaderCommands.projectURL {
                         LabeledContent("项目") {
                             Link("源码与上游声明", destination: url)

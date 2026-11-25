@@ -1,39 +1,39 @@
 import Combine
 import Foundation
+import Observation
 
 enum ReaderSessionError: LocalizedError {
     case alreadySignedIn
     case signInInProgress
     case followUnconfirmed
-    case favoriteUnconfirmed
 
     var errorDescription: String? {
         switch self {
         case .alreadySignedIn: "已有登录账号。"
         case .signInInProgress: "正在验证另一个登录请求。"
         case .followUnconfirmed: "贴吧尚未确认关注状态已更新。"
-        case .favoriteUnconfirmed: "贴吧尚未确认收藏状态已更新。"
         }
     }
 }
 
 /// One account owner for all windows. Views own only their navigation and read requests.
 @MainActor
-final class MacSession: ObservableObject {
+@Observable
+final class MacSession {
     struct FavoriteChange {
         let session: AccountSessionIdentity
         let threadID: Int64
         let isFavorite: Bool
     }
 
-    @Published private(set) var account: Account?
-    @Published private(set) var isReady = false
-    @Published var errorMessage: String?
+    private(set) var account: Account?
+    private(set) var isReady = false
+    var errorMessage: String?
 
     let api: any TiebaAPIService
     private let accountStore: AccountStore
-    private(set) lazy var recentForums = RecentForumStore.shared
-    private(set) lazy var searchHistory = SearchHistoryStore.shared
+    @ObservationIgnored private(set) lazy var recentForums = RecentForumStore.shared
+    @ObservationIgnored private(set) lazy var searchHistory = SearchHistoryStore.shared
     private(set) var forumSort = ForumThreadSortPreferenceStore()
     private let relationships = SocialRelationshipState()
     private let favoriteChanges = PassthroughSubject<FavoriteChange, Never>()
@@ -41,14 +41,15 @@ final class MacSession: ObservableObject {
     var forumFollowDidChange: AnyPublisher<ForumFollowChange, Never> {
         relationships.forumFollowDidChange.eraseToAnyPublisher()
     }
-    private lazy var social = SocialMutationCoordinator(api: api, state: relationships)
-    private lazy var writes = ContentSubmissionCoordinator(api: api)
+    @ObservationIgnored private lazy var social = SocialMutationCoordinator(api: api, state: relationships)
+    @ObservationIgnored private lazy var writes = AccountWriteCoordinator(api: api)
     private let artifactCleaner: any SessionArtifactCleaning
-    private lazy var logoutCoordinator = LogoutCoordinator(
+    @ObservationIgnored private lazy var logoutCoordinator = LogoutCoordinator(
         accountStore: accountStore,
         artifactCleaner: artifactCleaner,
         beginWriteInvalidation: { [weak self] in
             guard let self else { return }
+            self.writesInvalidated = true
             self.social.establishInvalidationBarrier()
             self.writes.establishInvalidationBarrier()
             await self.social.drainInvalidatedOperations()
@@ -56,12 +57,13 @@ final class MacSession: ObservableObject {
         },
         endWriteInvalidation: { [weak self] in self?.endWriteInvalidation() }
     )
-    private var subscriptions = Set<AnyCancellable>()
-    @Published private(set) var isLoggingOut = false
-    private var isSigningIn = false
-    private var didStartLoading = false
+    @ObservationIgnored private var subscriptions = Set<AnyCancellable>()
+    private(set) var isLoggingOut = false
+    @ObservationIgnored private var writesInvalidated = false
+    @ObservationIgnored private var isSigningIn = false
+    @ObservationIgnored private var didStartLoading = false
 
-    convenience init() {
+    convenience init(requestBuilder: TiebaRequestBuilder) {
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("SCREENSHOT_FIXTURES") {
             let arguments = ProcessInfo.processInfo.arguments
@@ -97,9 +99,13 @@ final class MacSession: ObservableObject {
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
         let api = SessionMonitoringTiebaAPI(
-            base: TiebaAPI(client: TiebaHTTPClient(session: SecureRemoteURLSession.make(
-                configuration: configuration, redirectScope: .baiduHTTPS
-            ))), monitor: monitor
+            base: TiebaAPI(
+                client: TiebaHTTPClient(session: SecureRemoteURLSession.make(
+                    configuration: configuration, redirectScope: .baiduHTTPS
+                )),
+                requestBuilder: requestBuilder
+            ),
+            monitor: monitor
         )
         self.init(api: api, accountStore: store, artifactCleaner: LiveSessionArtifactCleaner(),
                   expirationMonitor: monitor)
@@ -137,6 +143,8 @@ final class MacSession: ObservableObject {
     }
 
     private func endWriteInvalidation() {
+        guard writesInvalidated else { return }
+        writesInvalidated = false
         social.endInvalidation()
         writes.endInvalidation()
     }
@@ -158,12 +166,11 @@ final class MacSession: ObservableObject {
         return relationships.forumFollowOverride(accountID: account.id, forum: forum) ?? membership.isFollowed
     }
 
-    func setForumFollowed(_ forum: Forum, account: Account, followed: Bool) async throws -> Bool {
+    func setForumFollowed(_ forum: Forum, account: Account, followed: Bool) async throws {
         guard !isLoggingOut, account.sessionIdentity == self.account?.sessionIdentity else { throw CancellationError() }
         let membership = try await social.setForumFollowed(account: account, forum: forum, followed: followed)
-        guard membership.isFollowed == followed else { throw ReaderSessionError.followUnconfirmed }
         guard !isLoggingOut, account.sessionIdentity == self.account?.sessionIdentity else { throw CancellationError() }
-        return membership.isFollowed
+        guard membership.isFollowed == followed else { throw ReaderSessionError.followUnconfirmed }
     }
 
     func waitForFavoriteWrites(account: Account) async {
@@ -178,15 +185,16 @@ final class MacSession: ObservableObject {
         account: Account, threadID: Int64, forumID: Int64?, postID: UInt64, isFavorite: Bool
     ) async throws {
         guard !isLoggingOut, account.sessionIdentity == self.account?.sessionIdentity else { throw CancellationError() }
-        try await writes.performAccountWrite(account: account, target: .threadFavorite(threadID)) { [api] in
-            try await api.setAccountThreadFavorite(account: account, threadID: threadID, postID: postID, favorited: isFavorite)
-            try Task.checkCancellation()
-            let page = try await api.threadPage(account: account, threadID: threadID, page: 1, forumID: forumID)
-            try Task.checkCancellation()
-            guard page.isCollected == isFavorite else { throw ReaderSessionError.favoriteUnconfirmed }
-        }
+        try await writes.setThreadFavorite(account: account, threadID: threadID, forumID: forumID,
+                                           postID: postID, isFavorite: isFavorite)
         guard !isLoggingOut, account.sessionIdentity == self.account?.sessionIdentity else { throw CancellationError() }
         favoriteChanges.send(FavoriteChange(session: account.sessionIdentity, threadID: threadID, isFavorite: isFavorite))
+    }
+
+    func reportMutationFailure(_ error: Error, account: Account) {
+        guard !isLoggingOut, account.sessionIdentity == self.account?.sessionIdentity,
+              !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
+        errorMessage = ReaderErrorMessage.message(for: error, fallback: "操作未完成。")
     }
 
     func signIn(cookies: BaiduCookies) async throws {

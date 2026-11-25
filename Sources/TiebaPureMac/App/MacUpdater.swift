@@ -1,14 +1,16 @@
 import Combine
+import OSLog
 import Sparkle
 import SwiftUI
 
 @MainActor
 final class MacUpdater: ObservableObject {
-    @Published private(set) var unavailableReason: String? = "此构建未配置自动更新"
+    @Published private(set) var isAvailable = false
     @Published private(set) var canCheckForUpdates = false
     @Published private(set) var automaticallyChecksForUpdates = false
     @Published private(set) var automaticallyDownloadsUpdates = false
 
+    private let logger = Logger(subsystem: "io.github.yamakze.TiebaPureMac", category: "Updates")
     private var controller: SPUStandardUpdaterController?
 
     func start() {
@@ -18,12 +20,12 @@ final class MacUpdater: ObservableObject {
         do {
             try controller.updater.start()
             self.controller = controller
-            unavailableReason = nil
+            isAvailable = true
             controller.updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
             controller.updater.publisher(for: \.automaticallyChecksForUpdates).assign(to: &$automaticallyChecksForUpdates)
             controller.updater.publisher(for: \.automaticallyDownloadsUpdates).assign(to: &$automaticallyDownloadsUpdates)
         } catch {
-            unavailableReason = error.localizedDescription
+            logger.error("Sparkle startup failed: \(error.localizedDescription, privacy: .private)")
         }
     }
 
@@ -56,9 +58,7 @@ struct MacUpdateSettings: View {
 
     var body: some View {
         Section("软件更新") {
-            if let reason = updater.unavailableReason {
-                LabeledContent("状态", value: reason)
-            } else {
+            if updater.isAvailable {
                 Toggle("自动检查更新", isOn: Binding(
                     get: { updater.automaticallyChecksForUpdates },
                     set: updater.setAutomaticChecking
@@ -68,6 +68,8 @@ struct MacUpdateSettings: View {
                     set: updater.setAutomaticDownloads
                 ))
                 .disabled(!updater.automaticallyChecksForUpdates)
+            } else {
+                Text("自动更新不可用").foregroundStyle(.secondary)
             }
         }
     }

@@ -1,6 +1,5 @@
 import Foundation
 import SwiftProtobuf
-import AppKit
 
 enum TiebaClientVersion: String {
     case v12 = "12.52.1.0"
@@ -17,14 +16,11 @@ struct TiebaRequestBuilder {
     var screenHeight: Int
     var clientID: String
 
-    static func live() -> TiebaRequestBuilder {
-        let screen = NSScreen.main
-        let scale = screen?.backingScaleFactor ?? 1
-        let size = screen?.frame.size ?? CGSize(width: 1440, height: 900)
-        return TiebaRequestBuilder(
-            screenScale: Double(scale),
-            screenWidth: Int(size.width * scale),
-            screenHeight: Int(size.height * scale),
+    static func live(screenScale: Double = 1, screenWidth: Int = 1440, screenHeight: Int = 900) -> TiebaRequestBuilder {
+        TiebaRequestBuilder(
+            screenScale: screenScale,
+            screenWidth: screenWidth,
+            screenHeight: screenHeight,
             clientID: UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         )
     }

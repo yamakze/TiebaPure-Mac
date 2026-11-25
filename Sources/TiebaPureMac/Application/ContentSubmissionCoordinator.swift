@@ -33,28 +33,9 @@ final class ContentSubmissionCoordinator {
         let task: Task<ContentSubmissionReceipt, Error>
     }
 
-    enum AccountWriteTarget: Hashable, Sendable {
-        case profile
-        case deleteThread(Int64)
-        case threadFavorite(Int64)
-    }
-
-    private struct AccountWriteKey: Hashable, Sendable {
-        let session: AccountSessionIdentity
-        let target: AccountWriteTarget
-
-        var accountID: String { session.accountID }
-    }
-
-    private struct AccountWrite {
-        let id: UUID
-        let task: Task<Void, Error>
-    }
-
     private let api: any TiebaAPIService
     private let allowsSubmission: @MainActor (ContentSubmissionKind) -> Bool
     private var operations: [OperationKey: Operation] = [:]
-    private var accountWrites: [AccountWriteKey: AccountWrite] = [:]
     private var globalInvalidationCount = 0
     private var accountInvalidationCounts: [String: Int] = [:]
 
@@ -121,73 +102,6 @@ final class ContentSubmissionCoordinator {
         }
     }
 
-    /// Registers non-composer account mutations with the same session barrier
-    /// used by logout and account replacement. The stored task survives a view
-    /// dismissal, but session invalidation cancels and drains it before account
-    /// artifacts are cleared.
-    func performAccountWrite(
-        account: Account,
-        target: AccountWriteTarget,
-        coalescesConcurrentCalls: Bool = false,
-        operation: @escaping () async throws -> Void
-    ) async throws {
-        guard canSubmit(accountID: account.id) else {
-            throw ContentSubmissionCoordinatorError.sessionTransition
-        }
-
-        let key = AccountWriteKey(session: account.sessionIdentity, target: target)
-        if let existing = accountWrites[key] {
-            guard coalescesConcurrentCalls else {
-                throw ContentSubmissionCoordinatorError.operationInProgress
-            }
-            return try await existing.task.value
-        }
-
-        let id = UUID()
-        let task = Task {
-            try await operation()
-        }
-        accountWrites[key] = AccountWrite(id: id, task: task)
-
-        do {
-            try await task.value
-            finishAccountWrite(id: id, for: key)
-        } catch {
-            finishAccountWrite(id: id, for: key)
-            throw error
-        }
-    }
-
-    /// Read screens wait for outstanding favorite writes before asking the
-    /// service for an authoritative list. This closes the leave-and-reenter
-    /// race without cancelling a write that may already have reached Baidu.
-    func waitForThreadFavoriteWrites(account: Account) async {
-        let session = account.sessionIdentity
-        while true {
-            let matching = accountWrites.filter { key, _ in
-                key.session == session && key.target.isThreadFavorite
-            }
-            guard matching.isEmpty == false else { return }
-            for write in matching.values {
-                _ = await write.task.result
-            }
-            for (key, write) in matching {
-                finishAccountWrite(id: write.id, for: key)
-            }
-        }
-    }
-
-    func waitForThreadFavoriteWrite(account: Account, threadID: Int64) async {
-        let key = AccountWriteKey(
-            session: account.sessionIdentity,
-            target: .threadFavorite(threadID)
-        )
-        while let write = accountWrites[key] {
-            _ = await write.task.result
-            finishAccountWrite(id: write.id, for: key)
-        }
-    }
-
     /// Closes the matching submission entry point synchronously. Callers that
     /// coordinate multiple write domains must establish every barrier before
     /// awaiting any drain operation.
@@ -234,48 +148,18 @@ final class ContentSubmissionCoordinator {
         operations[key] = nil
     }
 
-    private func finishAccountWrite(id: UUID, for key: AccountWriteKey) {
-        guard accountWrites[key]?.id == id else { return }
-        accountWrites[key] = nil
-    }
-
     private func canSubmit(accountID: String) -> Bool {
         globalInvalidationCount == 0 && accountInvalidationCounts[accountID] == nil
     }
 
     private func drainOperations(accountID: String?) async {
-        while true {
-            let matching = operations.filter { key, _ in
-                accountID == nil || key.accountID == accountID
-            }
-            let matchingAccountWrites = accountWrites.filter { key, _ in
-                accountID == nil || key.accountID == accountID
-            }
-            guard matching.isEmpty == false || matchingAccountWrites.isEmpty == false else {
-                return
-            }
-
-            matching.values.forEach { $0.task.cancel() }
-            matchingAccountWrites.values.forEach { $0.task.cancel() }
-            for operation in matching.values {
-                _ = await operation.task.result
-            }
-            for write in matchingAccountWrites.values {
-                _ = await write.task.result
-            }
-            for (key, operation) in matching {
-                finishOperation(id: operation.id, for: key)
-            }
-            for (key, write) in matchingAccountWrites {
-                finishAccountWrite(id: write.id, for: key)
-            }
+        let matching = operations.filter { key, _ in
+            accountID == nil || key.accountID == accountID
         }
-    }
-}
-
-private extension ContentSubmissionCoordinator.AccountWriteTarget {
-    var isThreadFavorite: Bool {
-        if case .threadFavorite = self { return true }
-        return false
+        matching.values.forEach { $0.task.cancel() }
+        for (key, operation) in matching {
+            _ = await operation.task.result
+            finishOperation(id: operation.id, for: key)
+        }
     }
 }

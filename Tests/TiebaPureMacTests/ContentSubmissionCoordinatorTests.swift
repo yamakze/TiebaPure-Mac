@@ -182,7 +182,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testAccountInvalidationCancelsAndDrainsRegisteredProfileOrDeleteWrite() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()
@@ -209,14 +209,14 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
             try await coordinator.performAccountWrite(account: account, target: .profile) {}
             XCTFail("屏障释放前不应接受新的账号写操作")
         } catch {
-            XCTAssertEqual(error as? ContentSubmissionCoordinatorError, .sessionTransition)
+            XCTAssertEqual(error as? AccountWriteError, .sessionTransition)
         }
         coordinator.endInvalidation(accountID: account.id)
         try await coordinator.performAccountWrite(account: account, target: .profile) {}
     }
 
     func testConcurrentDeleteForSameAccountAndThreadSharesOneWrite() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()
@@ -256,7 +256,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testConcurrentProfileWritesAreRejectedInsteadOfCoalesced() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()
@@ -275,7 +275,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
             }
             XCTFail("资料写入不能把内容不同的并发操作合并为同一次请求")
         } catch {
-            XCTAssertEqual(error as? ContentSubmissionCoordinatorError, .operationInProgress)
+            XCTAssertEqual(error as? AccountWriteError, .operationInProgress)
         }
         var writeCount = await write.writeCount()
         XCTAssertEqual(writeCount, 1)
@@ -287,7 +287,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testFinishingOneFavoriteWriteKeepsOtherFavoriteWriteRegisteredForDrain() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()
@@ -336,7 +336,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testReplacementLoginDoesNotJoinOldSessionsFavoriteWrite() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let oldAccount = makeAccount()
@@ -384,7 +384,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testFavoriteReadBarrierWaitsForDispatchedWriteToFinish() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()
@@ -421,7 +421,7 @@ final class ContentSubmissionCoordinatorTests: XCTestCase {
     }
 
     func testThreadFavoriteReadBarrierOnlyWaitsForMatchingThread() async throws {
-        let coordinator = ContentSubmissionCoordinator(
+        let coordinator = AccountWriteCoordinator(
             api: SubmissionAPISpy(delayNanoseconds: 0)
         )
         let account = makeAccount()

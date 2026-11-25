@@ -1,9 +1,7 @@
 import SwiftUI
 
 struct MacReaderView: View {
-    @EnvironmentObject private var session: MacSession
-    let recentForums: RecentForumStore
-    let searchHistory: SearchHistoryStore
+    @Environment(MacSession.self) private var session
 
     @State private var section: ReaderSection = .home
     @State private var sections = MacReaderWorkspace()
@@ -34,9 +32,9 @@ struct MacReaderView: View {
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
             .safeAreaInset(edge: .bottom, spacing: 0) { accountBar }
         } detail: {
-            MacReaderSectionView(state: state, recentForums: recentForums, searchHistory: searchHistory,
-                                 openFollowedForum: openFollowedForum)
+            MacReaderSectionView(state: state, openFollowedForum: openFollowedForum)
                 .id(state.id)
+                .overlay(alignment: .top) { MacSessionNotice() }
         }
         .focusedSceneValue(\.macReaderActions, readerActions)
         .onChange(of: session.account?.sessionIdentity) { _, _ in
@@ -54,12 +52,6 @@ struct MacReaderView: View {
             }
         }
         .sheet(isPresented: $showsLogin) { MacLoginView() }
-        .alert("账号状态", isPresented: Binding(
-            get: { session.errorMessage != nil },
-            set: { if !$0 { session.errorMessage = nil } }
-        )) {
-            Button("好") { session.errorMessage = nil }
-        } message: { Text(session.errorMessage ?? "") }
     }
 
     private var readerActions: MacReaderActions {
@@ -124,7 +116,7 @@ struct MacReaderView: View {
                     Spacer(minLength: 0)
                     Menu {
                         Button("个人主页") { showsProfile = true }
-                        Button("退出登录", role: .destructive) { Task { await session.logOut() } }
+                        Button("退出登录", role: .destructive) { Task { [session] in await session.logOut() } }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -166,5 +158,24 @@ struct MacReaderView: View {
     private func openFollowedForum(_ forum: Forum) {
         sections[.forum].openForum(forum, sort: session.forumSort.selection(for: forum))
         show(.forum)
+    }
+}
+
+private struct MacSessionNotice: View {
+    @Environment(MacSession.self) private var session
+
+    var body: some View {
+        if let message = session.errorMessage {
+            HStack(spacing: 10) {
+                Label(message, systemImage: "exclamationmark.circle")
+                Button("关闭提示", systemImage: "xmark") { session.errorMessage = nil }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+            }
+            .font(.callout)
+            .padding(10)
+            .background(.regularMaterial, in: .rect(cornerRadius: 8))
+            .padding(12)
+        }
     }
 }

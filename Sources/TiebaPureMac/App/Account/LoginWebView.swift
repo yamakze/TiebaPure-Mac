@@ -71,18 +71,8 @@ struct LoginWebView: NSViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
         LoginDiagnostics.record("webViewCreated nonPersistent=true")
-#if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("UITEST_LOGIN_REDIRECT_FIXTURE") {
-            LoginDiagnostics.record("loadingFixture")
-            context.coordinator.loadLoginRedirectFixture(in: webView)
-        } else {
-            LoginDiagnostics.record("loadingLoginURL \(LoginDiagnostics.urlSummary(AuthSession.loginURL))")
-            webView.load(URLRequest(url: AuthSession.loginURL))
-        }
-#else
         LoginDiagnostics.record("loadingLoginURL \(LoginDiagnostics.urlSummary(AuthSession.loginURL))")
         webView.load(URLRequest(url: AuthSession.loginURL))
-#endif
         context.coordinator.startCookiePolling(webView)
         return webView
     }
@@ -106,6 +96,7 @@ struct LoginWebView: NSViewRepresentable {
         private var approvedCompletionURL: URL?
         private weak var observedWebView: WKWebView?
         private var cookiePollTimer: Timer?
+        private var blockedNavigationRetry: DispatchWorkItem?
 
         private static let cookieValidationTimeout: TimeInterval = 30
         private static let blockedNavigationCookieRetryCount = 8
@@ -219,6 +210,8 @@ struct LoginWebView: NSViewRepresentable {
             didComplete = true
             isExtractingCookies = false
             isCheckingBlockedNavigation = false
+            blockedNavigationRetry?.cancel()
+            blockedNavigationRetry = nil
             stopCookiePolling()
             webView.stopLoading()
             webView.navigationDelegate = nil
@@ -403,7 +396,8 @@ struct LoginWebView: NSViewRepresentable {
                 LoginDiagnostics.record("cookiePoll \(LoginDiagnostics.cookieSummary(cookies))")
 
                 guard shouldValidate else {
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, !self.didComplete else { return }
                         self.isExtractingCookies = false
                         self.reportMissingCookiesIfTimedOut()
                     }
@@ -444,7 +438,7 @@ struct LoginWebView: NSViewRepresentable {
             remainingCookieChecks: Int
         ) {
             webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self, weak webView] cookies in
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self, weak webView] in
                     guard let self else { return }
                     guard self.didComplete == false, let webView else {
                         self.isCheckingBlockedNavigation = false
@@ -458,7 +452,9 @@ struct LoginWebView: NSViewRepresentable {
                             + LoginDiagnostics.cookieSummary(cookies)
                     )
                     if hasPrimaryLoginCookie == false, remainingCookieChecks > 0 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + Self.blockedNavigationCookieRetryDelay) {
+                        let retry = DispatchWorkItem { [weak self, weak webView] in
+                            guard let self, !self.didComplete, let webView else { return }
+                            self.blockedNavigationRetry = nil
                             self.checkBlockedNavigation(
                                 url,
                                 in: webView,
@@ -466,6 +462,8 @@ struct LoginWebView: NSViewRepresentable {
                                 remainingCookieChecks: remainingCookieChecks - 1
                             )
                         }
+                        self.blockedNavigationRetry = retry
+                        DispatchQueue.main.asyncAfter(deadline: .now() + Self.blockedNavigationCookieRetryDelay, execute: retry)
                         return
                     }
 
@@ -570,16 +568,19 @@ struct LoginWebView: NSViewRepresentable {
         private func complete(with cookies: [HTTPCookie], reportMissingCookies: Bool) {
             do {
                 let result = try AuthSession.extract(from: cookies)
-                DispatchQueue.main.async {
-                    guard self.didComplete == false else { return }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.didComplete else { return }
                     LoginDiagnostics.record("cookieExtractionSucceeded")
                     self.didComplete = true
+                    self.blockedNavigationRetry?.cancel()
+                    self.blockedNavigationRetry = nil
                     self.isExtractingCookies = false
                     self.stopCookiePolling()
                     self.onCookiesReady(result)
                 }
             } catch {
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.didComplete else { return }
                     self.isExtractingCookies = false
                     LoginDiagnostics.record(
                         "cookieExtractionNotReady errorType=\(String(reflecting: type(of: error)))"
@@ -600,7 +601,8 @@ struct LoginWebView: NSViewRepresentable {
             }
             let nsError = error as NSError
             LoginDiagnostics.record("navigationErrorReported domain=\(nsError.domain) code=\(nsError.code)")
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.didComplete else { return }
                 self.onError(error)
             }
         }
@@ -611,56 +613,5 @@ struct LoginWebView: NSViewRepresentable {
             return nsError.code == NSURLErrorCancelled || nsError.code == NSURLErrorUnsupportedURL
         }
 
-#if DEBUG
-        func loadLoginRedirectFixture(in webView: WKWebView) {
-            let cookieStore = webView.configuration.websiteDataStore.httpCookieStore
-            let properties: [[HTTPCookiePropertyKey: Any]] = [
-                [
-                    .name: "BDUSS",
-                    .value: "fixture-bduss",
-                    .domain: ".baidu.com",
-                    .path: "/",
-                    .secure: "TRUE"
-                ],
-                [
-                    .name: "STOKEN",
-                    .value: "fixture-stoken",
-                    .domain: ".tieba.baidu.com",
-                    .path: "/",
-                    .secure: "TRUE"
-                ]
-            ]
-            let cookies = properties.compactMap(HTTPCookie.init(properties:))
-
-            func installCookie(at index: Int) {
-                guard index < cookies.count else {
-                    let html = """
-                    <!doctype html>
-                    <html lang="zh-CN">
-                    <head>
-                      <meta name="viewport" content="width=device-width, initial-scale=1">
-                      <style>
-                        body { font: -apple-system-body; padding: 32px 20px; }
-                        a { display: block; padding: 18px; text-align: center; }
-                      </style>
-                    </head>
-                    <body>
-                      <h1>验证码验证完成</h1>
-                      <a aria-label="跳过设置密码" href="#" onclick="window.open('https://a.app.qq.com/o/simple.jsp?pkgname=com.baidu.tieba', '_blank'); return false;">
-                        跳过设置密码
-                      </a>
-                    </body>
-                    </html>
-                    """
-                    webView.loadHTMLString(html, baseURL: URL(string: "https://wappass.baidu.com/passport")!)
-                    return
-                }
-                cookieStore.setCookie(cookies[index]) {
-                    installCookie(at: index + 1)
-                }
-            }
-            installCookie(at: 0)
-        }
-#endif
     }
 }

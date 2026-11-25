@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MacForumFollowButton: View {
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     let forum: Forum
     let account: Account
 
@@ -15,15 +15,13 @@ struct MacForumFollowButton: View {
             if let isFollowed {
                 Button(isFollowed ? "已关注" : "关注") {
                     isWriting = true
-                    Task {
-                        defer { isWriting = false }
+                    // The account owns this write across navigation and drains it on logout.
+                    Task { [session, forum, account, writing = $isWriting] in
+                        defer { writing.wrappedValue = false }
                         do {
-                            self.isFollowed = try await session.setForumFollowed(forum, account: account, followed: !isFollowed)
-                        } catch is CancellationError {
+                            try await session.setForumFollowed(forum, account: account, followed: !isFollowed)
                         } catch {
-                            if account.sessionIdentity == session.account?.sessionIdentity {
-                                session.errorMessage = ReaderErrorMessage.message(for: error)
-                            }
+                            session.reportMutationFailure(error, account: account)
                         }
                     }
                 }
@@ -45,7 +43,7 @@ struct MacForumFollowButton: View {
             }
         }
         .onReceive(session.forumFollowDidChange) { change in
-            if change.accountID == account.id, SocialRelationshipState.sameForum(change.forum, forum) {
+            if change.accountID == account.id, change.forum.refers(to: forum) {
                 isFollowed = change.isFollowed
             }
         }

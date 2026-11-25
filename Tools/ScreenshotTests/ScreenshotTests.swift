@@ -79,7 +79,7 @@ final class ScreenshotTests: XCTestCase {
         for state in ["EMPTY", "ERROR", "LOADING"] {
             launchFixture("SCREENSHOT_\(state)", "-io.github.yamakze.TiebaPureMac.appearance", "light")
             if state == "EMPTY" { XCTAssertTrue(app.staticTexts["暂无帖子"].isPresent(within: 10)) }
-            if state == "ERROR" { XCTAssertTrue(app.staticTexts["网络不可用，请检查网络连接。"].isPresent(within: 10)) }
+            if state == "ERROR" { XCTAssertTrue(app.staticTexts["网络不可用。"].isPresent(within: 10)) }
             if state == "LOADING" { XCTAssertTrue(app.descendants(matching: .any)["reader-loading"].firstMatch.isPresent(within: 10)) }
             capture("10-home-\(state.lowercased())")
         }

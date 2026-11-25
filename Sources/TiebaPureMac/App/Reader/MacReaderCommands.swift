@@ -32,9 +32,9 @@ private extension ForumThreadCategory {
     var sortOptionTitle: String {
         switch self {
         case .replyTime:
-            return "回复时间排序"
+            return "回复时间"
         case .publishTime:
-            return "发帖时间排序"
+            return "发帖时间"
         case .featured:
             return "精华"
         }

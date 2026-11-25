@@ -63,8 +63,7 @@ final class MacReaderSectionState {
 
     init(section: ReaderSection) {
         self.section = section
-        if section == .home || section == .favorites { pages.reload() }
-        if section == .followedForums { followed.reload() }
+        if section == .home { pages.reload() }
     }
 
     var canReload: Bool {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MacThreadView: View {
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     @Bindable var reading: ThreadReadingState
     @State private var imagePreview: MacImagePreviewSelection?
 
@@ -20,18 +20,16 @@ struct MacThreadView: View {
             if let account = session.account, let isFavorite = reading.isFavorite, let main = reading.pages.items.first {
                 Button(isFavorite ? "取消收藏" : "收藏", systemImage: isFavorite ? "bookmark.fill" : "bookmark") {
                     reading.isUpdatingFavorite = true
-                    Task {
+                    // A submitted write remains active when the reader closes this thread.
+                    Task { [session, reading, thread] in
                         defer { reading.isUpdatingFavorite = false }
                         do {
                             try await session.setThreadFavorite(
                                 account: account, threadID: thread.id, forumID: reading.forumID ?? thread.forumID,
                                 postID: reading.targetPostID ?? main.id, isFavorite: !isFavorite
                             )
-                        } catch is CancellationError {
                         } catch {
-                            if account.sessionIdentity == session.account?.sessionIdentity {
-                                session.errorMessage = ReaderErrorMessage.message(for: error)
-                            }
+                            session.reportMutationFailure(error, account: account)
                         }
                     }
                 }
@@ -169,7 +167,7 @@ struct MacThreadView: View {
 }
 
 private struct MacSubpostsView: View {
-    @EnvironmentObject private var session: MacSession
+    @Environment(MacSession.self) private var session
     let threadID: Int64
     let forumID: Int64?
     @Bindable var reading: SubpostsReadingState
