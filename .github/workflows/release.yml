@@ -32,7 +32,7 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
-      - name: Check tag and run tests
+      - name: Check release tag
         run: |
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)
           if [[ "$RELEASE_TAG" != "v$version" ]]; then
@@ -41,7 +41,19 @@ jobs:
           fi
           scripts/verify-project.sh
           scripts/release-notes.sh "$RELEASE_TAG" >/dev/null
-          swift test
+      - name: Check Sparkle build number
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          previous=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 1 --json tagName --jq '.[0].tagName // empty')
+          if [[ -n "$previous" ]]; then
+            git fetch --depth=1 --no-tags origin "refs/tags/$previous"
+            git show FETCH_HEAD:Resources/Info.plist | python3 scripts/lib/check-release-build.py Resources/Info.plist
+          fi
+      - name: Run tests
+        run: swift test
       - name: Sign and notarize Apple Silicon app
         env:
           CODE_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
