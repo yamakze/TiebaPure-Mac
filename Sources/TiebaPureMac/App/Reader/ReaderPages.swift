@@ -3,14 +3,12 @@ import SwiftUI
 /// Restores the last visible item when the current section creates a new scroll view.
 struct ReaderScrollView<ID: Hashable, Content: View>: View {
     @Binding private var position: ID?
-    @State private var initialPosition: ID?
     @State private var didRestorePosition = false
     private let contentWidth: CGFloat
     private let content: Content
 
     init(position: Binding<ID?>, contentWidth: CGFloat = .infinity, @ViewBuilder content: () -> Content) {
         _position = position
-        _initialPosition = State(initialValue: position.wrappedValue)
         self.contentWidth = contentWidth
         self.content = content()
     }
@@ -30,7 +28,7 @@ struct ReaderScrollView<ID: Hashable, Content: View>: View {
                     guard !didRestorePosition else { return }
                     // Restore explicitly after the targets are mounted. SwiftUI can report the first item
                     // while rebuilding the viewport, before it applies the stored position.
-                    if let initialPosition { scroll.scrollTo(initialPosition, anchor: .top) }
+                    if let position { scroll.scrollTo(position, anchor: .top) }
                     didRestorePosition = true
                 }
         }

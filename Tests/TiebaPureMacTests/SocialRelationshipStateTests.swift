@@ -576,9 +576,9 @@ private actor ControlledSocialMutationAPI: TiebaAPIService {
     }
 
     func validateLogin(cookies: BaiduCookies) async throws -> Account { fatalError("unused") }
-    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> [ThreadSummary] { fatalError("unused") }
+    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage { fatalError("unused") }
     func followedForums(account: Account) async throws -> [Forum] { fatalError("unused") }
-    func forumThreads(account: Account?, forumName: String, page: Int, category: ForumThreadCategory) async throws -> [ThreadSummary] { fatalError("unused") }
+    func forumThreads(account: Account?, forumName: String, page: Int, category: ForumThreadCategory) async throws -> ThreadListPage { fatalError("unused") }
     func searchThreads(keyword: String, page: Int, sortType: Int, filterType: Int, forumName: String?, pageSize: Int) async throws -> SearchResultsPage { fatalError("unused") }
     func resolveUser(named name: String) async throws -> UserSummary { fatalError("unused") }
     func threadPage(account: Account?, threadID: Int64, page: Int, forumID: Int64?, postID: UInt64?, seeLz: Bool, sortType: ThreadReplySort) async throws -> ThreadPage { fatalError("unused") }

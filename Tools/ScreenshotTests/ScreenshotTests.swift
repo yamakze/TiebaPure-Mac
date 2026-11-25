@@ -256,6 +256,8 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(homeList.isPresent(within: 10))
         let homeFirst = app.buttons["thread-1001-0"].firstMatch
         XCTAssertTrue(homeFirst.isPresent(within: 10))
+        let nextPage = app.buttons["thread-1101-0"].firstMatch
+        XCTAssertFalse(nextPage.exists)
         homeList.scroll(byDeltaX: 0, deltaY: -670)
         let homeRows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "thread-"))
         let topHomeRow = try XCTUnwrap(topVisibleElement(matching: homeRows, in: homeList)).identifier
@@ -322,6 +324,8 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertTrue(restoredRow.isPresent(within: 10))
         XCTAssertLessThan(restoredRow.frame.midY, homeList.frame.midY)
         XCTAssertGreaterThanOrEqual(restoredRow.frame.midY, homeList.frame.minY)
+        homeList.scroll(byDeltaX: 0, deltaY: -5000)
+        XCTAssertTrue(nextPage.isPresent(within: 10))
         homeList.scroll(byDeltaX: 0, deltaY: 1700)
         XCTAssertTrue(homeFirst.isPresent(within: 10))
         homeFirst.click()

@@ -47,7 +47,7 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         account: Account?,
         page: Int,
         loadType: Int
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         try await monitored(account: account) {
             try await base.personalizedThreads(account: account, page: page, loadType: loadType)
         }
@@ -64,7 +64,7 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         forumName: String,
         page: Int,
         category: ForumThreadCategory
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         try await monitored(account: account) {
             try await base.forumThreads(
                 account: account,

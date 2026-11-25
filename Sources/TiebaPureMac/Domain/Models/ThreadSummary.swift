@@ -158,3 +158,9 @@ enum TiebaUserName {
             )
     }
 }
+
+/// Continuation is independent of the number of visible threads after filtering.
+struct ThreadListPage {
+    let threads: [ThreadSummary]
+    let hasMore: Bool
+}

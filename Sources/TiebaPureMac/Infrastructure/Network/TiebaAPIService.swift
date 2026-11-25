@@ -2,14 +2,14 @@ import Foundation
 
 protocol TiebaAPIService {
     func validateLogin(cookies: BaiduCookies) async throws -> Account
-    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> [ThreadSummary]
+    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage
     func followedForums(account: Account) async throws -> [Forum]
     func forumThreads(
         account: Account?,
         forumName: String,
         page: Int,
         category: ForumThreadCategory
-    ) async throws -> [ThreadSummary]
+    ) async throws -> ThreadListPage
     func searchThreads(
         keyword: String,
         page: Int,
@@ -112,7 +112,7 @@ extension TiebaAPIService {
         )
     }
 
-    func forumThreads(account: Account?, forumName: String, page: Int) async throws -> [ThreadSummary] {
+    func forumThreads(account: Account?, forumName: String, page: Int) async throws -> ThreadListPage {
         try await forumThreads(
             account: account,
             forumName: forumName,

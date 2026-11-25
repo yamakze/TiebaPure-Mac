@@ -57,26 +57,27 @@ struct FixtureTiebaAPI: TiebaAPIService {
         return Self.account
     }
 
-    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> [ThreadSummary] {
+    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage {
         try await prepare(page: page)
-        guard scenario != .empty else { return [] }
+        guard scenario != .empty else { return ThreadListPage(threads: [], hasMore: false) }
         if scenario == .slowHomeRefresh, page == 1 {
             let requestNumber = await state.nextPersonalizedPageOneRequestNumber()
-            guard requestNumber > 1 else { return Self.threads }
+            guard requestNumber > 1 else { return ThreadListPage(threads: Self.threads, hasMore: false) }
             if requestNumber == 2 {
                 try await Task.sleep(nanoseconds: 20_000_000_000)
-                return [Self.refreshedThread]
+                return ThreadListPage(threads: [Self.refreshedThread], hasMore: false)
             }
             var duplicate = Self.refreshedThread
             duplicate.title = "重复的首页刷新请求"
-            return [duplicate]
+            return ThreadListPage(threads: [duplicate], hasMore: false)
         }
         if scenario == .slowPaginationRefresh, page > 1 {
             try await Task.sleep(nanoseconds: 10_000_000_000)
         }
         if (scenario == .refreshUpdate || scenario == .slowPaginationRefresh), page == 1 {
             let requestNumber = await state.nextPersonalizedPageOneRequestNumber()
-            return requestNumber == 1 ? Self.threads : [Self.refreshedThread]
+            return ThreadListPage(threads: requestNumber == 1 ? Self.threads : [Self.refreshedThread],
+                                  hasMore: scenario == .slowPaginationRefresh && requestNumber == 1)
         }
         if page == 2, scenario == .macReaderRetry, await state.shouldFail(page: page) {
             throw URLError(.timedOut)
@@ -86,9 +87,10 @@ struct FixtureTiebaAPI: TiebaAPIService {
             thread.id = 1101
             thread.title = "连续加载的下一页帖子"
             thread.blocks = [.text("用于验证触底翻页、失败重试与列表追加。")]
-            return [Self.threads[0], thread]
+            return ThreadListPage(threads: [Self.threads[0], thread], hasMore: false)
         }
-        return page == 1 ? personalizedFixtureThreads : []
+        return ThreadListPage(threads: page == 1 ? personalizedFixtureThreads : [],
+                              hasMore: page == 1 && (scenario == .macReader || scenario == .macReaderRetry))
     }
 
     func followedForums(account: Account) async throws -> [Forum] {
@@ -113,7 +115,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
         forumName: String,
         page: Int,
         category: ForumThreadCategory
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         if scenario == .forumCategoryRace, page == 1 {
             let delay: UInt64
             switch category {
@@ -133,8 +135,8 @@ struct FixtureTiebaAPI: TiebaAPIService {
         } else {
             try await prepare(page: page)
         }
-        guard scenario != .empty else { return [] }
-        guard page == 1 else { return [] }
+        guard scenario != .empty else { return ThreadListPage(threads: [], hasMore: false) }
+        guard page == 1 else { return ThreadListPage(threads: [], hasMore: false) }
 
         var fixtureThreads = Self.threads.map { thread in
             var copy = thread
@@ -150,7 +152,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
 
         if scenario == .emptyThenSuccess {
             let requestNumber = await state.nextForumPageOneRequestNumber()
-            guard requestNumber > 1 else { return [] }
+            guard requestNumber > 1 else { return ThreadListPage(threads: [], hasMore: false) }
             if requestNumber > 2, fixtureThreads.isEmpty == false {
                 fixtureThreads[0].title = "贴吧连续刷新第\(requestNumber - 2)轮"
             }
@@ -184,7 +186,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
         }
 
         let submittedThreads = await state.submittedThreads(forumName: forumName)
-        return submittedThreads + fixtureThreads
+        return ThreadListPage(threads: submittedThreads + fixtureThreads, hasMore: false)
     }
 
     func searchThreads(

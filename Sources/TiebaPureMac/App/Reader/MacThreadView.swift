@@ -75,12 +75,12 @@ struct MacThreadView: View {
                     floor(post, authorID: authorID)
                         .id(ThreadReadingState.ScrollTarget.post(post.id))
                 }
+                ReaderPageFooter(loading: reading.pages.request != nil, error: reading.pages.error,
+                                 nextPage: reading.pages.nextPage, loadNext: { reading.pages.loadNext() },
+                                 retry: { reading.pages.retry() })
             }
             .scrollTargetLayout()
             .frame(maxWidth: .infinity, alignment: .leading)
-            ReaderPageFooter(loading: reading.pages.request != nil, error: reading.pages.error,
-                             nextPage: reading.pages.nextPage, loadNext: { reading.pages.loadNext() },
-                             retry: { reading.pages.retry() })
         }
         .contentMargins(24, for: .scrollContent)
         .accessibilityIdentifier("thread-floors")
@@ -199,17 +199,15 @@ private struct MacSubpostsView: View {
                                 MacContentBlocks(blocks: subpost.blocks, preview: preview)
                                 Divider()
                             }
-                            .id(subpost.id)
                         }
-                    }
-                    .scrollTargetLayout()
-                    VStack {
-                        if reading.pages.items.isEmpty && reading.pages.request == nil && reading.pages.error == nil {
+                        if reading.pages.items.isEmpty && reading.pages.nextPage == nil
+                            && reading.pages.request == nil && reading.pages.error == nil {
                             Text("暂无回复").foregroundStyle(.secondary)
                         }
                         ReaderPageFooter(loading: reading.pages.request != nil, error: reading.pages.error, nextPage: reading.pages.nextPage,
                                          loadNext: { reading.pages.loadNext() }, retry: { reading.pages.retry() })
                     }
+                    .scrollTargetLayout()
                 }
                 .contentMargins(14, for: .scrollContent)
                 .onAppear { reading.pages.loadInitialPage() }

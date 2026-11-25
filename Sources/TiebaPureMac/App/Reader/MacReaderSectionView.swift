@@ -121,8 +121,7 @@ struct MacReaderSectionView: View {
     }
 
     private var threadList: some View {
-        let prefetchID = state.pages.items.dropLast(2).last?.id
-        return Group {
+        Group {
             if (section == .forum || section == .search) && !state.canReload {
                 history
             } else if state.pages.items.isEmpty && state.pages.nextPage == nil {
@@ -152,16 +151,12 @@ struct MacReaderSectionView: View {
                                 .accessibilityIdentifier("thread-\(destination.id)")
                                 Divider()
                             }
-                            .id(destination.id)
-                            .onAppear {
-                                if destination.id == prefetchID { state.pages.loadNext() }
-                            }
                         }
+                        ReaderPageFooter(loading: state.pages.request != nil, error: state.pages.error,
+                                         nextPage: state.pages.nextPage, loadNext: { state.pages.loadNext() },
+                                         retry: { state.pages.retry() })
                     }
                     .scrollTargetLayout()
-                    ReaderPageFooter(loading: state.pages.request != nil, error: state.pages.error,
-                                     nextPage: state.pages.nextPage, loadNext: { state.pages.loadNext() },
-                                     retry: { state.pages.retry() })
                 }
                 .contentMargins(.horizontal, 24, for: .scrollContent)
                 .accessibilityIdentifier("reader-thread-list")
@@ -348,14 +343,14 @@ struct MacReaderSectionView: View {
                 incoming = result.results.map { MacThreadDestination(thread: $0.threadSummary, matchedPostID: $0.postID) }
                 next = result.hasMore ? max(page, result.currentPage) + 1 : nil
             case (.home, _):
-                incoming = try await session.api.personalizedThreads(account: account, page: page, loadType: page == 1 ? 1 : 2)
-                    .map { MacThreadDestination(thread: $0) }
-                next = incoming.isEmpty ? nil : page + 1
+                let result = try await session.api.personalizedThreads(account: account, page: page, loadType: page == 1 ? 1 : 2)
+                incoming = result.threads.map { MacThreadDestination(thread: $0) }
+                next = result.hasMore ? page + 1 : nil
             case (.forum, true):
                 guard let forum else { return }
-                incoming = try await session.api.forumThreads(account: account, forumName: forum.name, page: page, category: forumCategory)
-                    .map { MacThreadDestination(thread: $0) }
-                next = incoming.isEmpty ? nil : page + 1
+                let result = try await session.api.forumThreads(account: account, forumName: forum.name, page: page, category: forumCategory)
+                incoming = result.threads.map { MacThreadDestination(thread: $0) }
+                next = result.hasMore ? page + 1 : nil
             case (.favorites, _):
                 guard let account else { return }
                 await session.waitForFavoriteWrites(account: account)

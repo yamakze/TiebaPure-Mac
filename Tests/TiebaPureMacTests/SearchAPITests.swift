@@ -117,7 +117,7 @@ final class SearchAPITests: XCTestCase {
             return Self.forumPageResponseJSON
         }
 
-        let threads = try await api.forumThreads(account: .preview, forumName: "显卡", page: 1)
+        let threads = try await api.forumThreads(account: .preview, forumName: "显卡", page: 1).threads
 
         XCTAssertEqual(counter.count, 2)
         XCTAssertEqual(threads.count, 1)
@@ -165,7 +165,7 @@ final class SearchAPITests: XCTestCase {
                     forumName: "显卡",
                     page: page,
                     category: testCase.category
-                )
+                ).threads
                 XCTAssertTrue(threads.isEmpty)
             }
         }
@@ -200,7 +200,7 @@ final class SearchAPITests: XCTestCase {
                 forumName: "显卡",
                 page: 1,
                 category: testCase.category
-            )
+            ).threads
             XCTAssertTrue(threads.isEmpty)
         }
     }
@@ -251,7 +251,7 @@ final class SearchAPITests: XCTestCase {
             account: nil,
             forumName: "语音测试",
             page: 1
-        )
+        ).threads
 
         XCTAssertEqual(threads.map(\.id), [901, 902])
         XCTAssertEqual(threads[0].blocks, [
@@ -320,11 +320,26 @@ final class SearchAPITests: XCTestCase {
             account: nil,
             forumName: "语音测试",
             page: 1
-        )
+        ).threads
 
         XCTAssertEqual(threads.map(\.id), [903, 904])
         XCTAssertEqual(threads[0].blocks, [.text("摘要"), .text("[语音]")])
         XCTAssertEqual(threads[1].blocks, [.text("[语音]")])
+    }
+
+    func testFilteredForumPageStillAllowsPagination() async throws {
+        let api = makeAPI { request in
+            let fields = try Self.formFields(from: request)
+            if fields["pn"] == "1" {
+                return Data(#"{"error_code":0,"thread_list":[{"id":907,"is_deleted":"1"}]}"#.utf8)
+            }
+            return Self.emptyForumPageResponseJSON
+        }
+        let filtered = try await api.forumThreads(account: nil, forumName: "显卡", page: 1)
+        XCTAssertTrue(filtered.threads.isEmpty)
+        XCTAssertTrue(filtered.hasMore)
+        let end = try await api.forumThreads(account: nil, forumName: "显卡", page: 2)
+        XCTAssertFalse(end.hasMore)
     }
 
     func testForumCategoryFallbackPreservesFormFieldsAfterProtobufDecodeFailure() async throws {
@@ -358,7 +373,7 @@ final class SearchAPITests: XCTestCase {
                 forumName: "显卡",
                 page: 1,
                 category: testCase.category
-            )
+            ).threads
             XCTAssertEqual(counter.count, 2)
             XCTAssertTrue(threads.isEmpty)
         }

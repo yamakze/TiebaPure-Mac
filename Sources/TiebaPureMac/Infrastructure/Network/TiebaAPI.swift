@@ -315,7 +315,7 @@ private extension String {
 }
 
 extension TiebaAPI {
-    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> [ThreadSummary] {
+    func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage {
         let requestPage = try TiebaRequestValuePolicy.unsignedPage(page)
         var requestData = Tieba_PersonalizedRequestData()
         requestData.appPos = Tieba_AppPosInfo()
@@ -355,9 +355,11 @@ extension TiebaAPI {
         try validateTiebaError(response.error)
         guard response.hasData else { throw TiebaAPIError.emptyResponse }
 
-        return response.data.threadList
+        let rawThreads = response.data.threadList
+        let threads = rawThreads
             .filter(TiebaContentFilter.shouldMap(thread:))
             .map { ThreadMapper.fromThreadInfo($0, usersByID: [:]) }
+        return ThreadListPage(threads: threads, hasMore: !rawThreads.isEmpty)
     }
 
     func followedForums(account: Account) async throws -> [Forum] {
@@ -383,7 +385,7 @@ extension TiebaAPI {
         forumName: String,
         page: Int,
         category: ForumThreadCategory = .replyTime
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         _ = try TiebaRequestValuePolicy.signedPage(page)
         guard let account else {
             return try await forumThreadsForm(
@@ -417,7 +419,7 @@ extension TiebaAPI {
         forumName: String,
         page: Int,
         category: ForumThreadCategory
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         var requestData = Tieba_FrsPage_FrsPageRequestData()
         requestData.adParam = Tieba_FrsPage_AdParam()
         requestData.appPos = Tieba_AppPosInfo()
@@ -457,16 +459,18 @@ extension TiebaAPI {
             usersByID[user.id] = user
         }
 
-        return response.data.threadList
+        let rawThreads = response.data.threadList
+        let threads = rawThreads
             .filter(TiebaContentFilter.shouldMap(thread:))
             .map { ThreadMapper.fromThreadInfo($0, usersByID: usersByID) }
+        return ThreadListPage(threads: threads, hasMore: !rawThreads.isEmpty)
     }
 
     private func forumThreadsForm(
         forumName: String,
         page: Int,
         category: ForumThreadCategory
-    ) async throws -> [ThreadSummary] {
+    ) async throws -> ThreadListPage {
         let cuid = requestBuilder.miniCUID
         var fields = requestBuilder.miniCommonFields()
         fields.merge([
@@ -502,9 +506,11 @@ extension TiebaAPI {
 
         try validateResponseCode(response.errorCode, message: response.errorMessage)
 
-        return response.threadList
+        let usersByID = response.usersByID
+        let threads = response.threadList
             .filter(\.shouldKeep)
-            .map { $0.threadSummary(usersByID: response.usersByID, forumName: forumName) }
+            .map { $0.threadSummary(usersByID: usersByID, forumName: forumName) }
+        return ThreadListPage(threads: threads, hasMore: !response.threadList.isEmpty)
     }
 }
 

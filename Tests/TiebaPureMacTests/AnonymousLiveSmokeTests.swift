@@ -23,7 +23,7 @@ final class AnonymousLiveSmokeTests: XCTestCase {
             forumName: "iphone",
             page: 1,
             category: .replyTime
-        )
+        ).threads
         let thread = try XCTUnwrap(
             threads.first(where: { $0.replyCount >= 30 }),
             "公开吧页应提供一个至少 30 条回复的帖子用于倒序契约验证"
@@ -86,7 +86,7 @@ final class AnonymousLiveSmokeTests: XCTestCase {
 
         let api = TiebaAPI(client: TiebaHTTPClient(session: apiSession))
 
-        let home = try await api.personalizedThreads(account: nil, page: 1, loadType: 1)
+        let home = try await api.personalizedThreads(account: nil, page: 1, loadType: 1).threads
         XCTAssertFalse(home.isEmpty, "匿名首页应返回至少一个帖子")
 
         let forumThreads = try await api.forumThreads(
@@ -94,7 +94,7 @@ final class AnonymousLiveSmokeTests: XCTestCase {
             forumName: "iphone",
             page: 1,
             category: .replyTime
-        )
+        ).threads
         XCTAssertFalse(forumThreads.isEmpty, "匿名进吧应返回帖子")
 
         var mediaResult: SearchResult?
