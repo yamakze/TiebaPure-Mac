@@ -2,9 +2,23 @@ import SwiftUI
 
 struct MacThreadDestination: Identifiable {
     let thread: ThreadSummary
-    var matchedPostID: UInt64? = nil
-    var markedPostID: UInt64? = nil
-    var id: String { "\(thread.id)-\(matchedPostID ?? 0)" }
+    let matchedPostID: UInt64?
+    let markedPostID: UInt64?
+    let id: String
+    let textPreview: String
+    let thumbnails: [URL]
+
+    init(thread: ThreadSummary, matchedPostID: UInt64? = nil, markedPostID: UInt64? = nil) {
+        self.thread = thread
+        self.matchedPostID = matchedPostID
+        self.markedPostID = markedPostID
+        id = "\(thread.id)-\(matchedPostID ?? 0)"
+        textPreview = thread.textPreview
+        thumbnails = Array(thread.blocks.lazy.compactMap { block -> URL? in
+            guard case let .image(image) = block else { return nil }
+            return image.thumbnailURL ?? image.originalURL
+        }.prefix(3))
+    }
 }
 
 struct MacReaderWorkspace {

@@ -7,7 +7,6 @@ enum TiebaImageRequestPolicy {
     static func request(for url: URL) -> URLRequest {
         var request = URLRequest(
             url: url,
-            cachePolicy: .returnCacheDataElseLoad,
             timeoutInterval: 20
         )
         request.setValue("tieba/12.52.1.0 skin/default", forHTTPHeaderField: "User-Agent")

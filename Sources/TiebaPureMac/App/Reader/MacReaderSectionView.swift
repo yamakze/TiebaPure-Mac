@@ -144,7 +144,7 @@ struct MacReaderSectionView: View {
                                     searchPresented = false
                                     state.openThread(destination)
                                 } label: {
-                                    MacThreadRow(thread: destination.thread,
+                                    MacThreadRow(destination: destination,
                                                  forumCategory: state.isInForum && state.query.isEmpty ? forumCategory : nil)
                                         .padding(.vertical, 4)
                                         .contentShape(Rectangle())

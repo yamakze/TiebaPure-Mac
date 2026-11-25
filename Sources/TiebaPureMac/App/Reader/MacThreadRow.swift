@@ -1,19 +1,17 @@
 import SwiftUI
 
 struct MacThreadRow: View {
-    let thread: ThreadSummary
+    let destination: MacThreadDestination
     var forumCategory: ForumThreadCategory? = nil
 
     var body: some View {
-        let preview = thread.textPreview
+        let thread = destination.thread
+        let preview = destination.textPreview
+        let thumbnails = destination.thumbnails
         let date = switch forumCategory {
         case .replyTime, .featured: thread.lastReplyAt ?? thread.createdAt
         case .publishTime, nil: thread.createdAt ?? thread.lastReplyAt
         }
-        let thumbnails = Array(thread.blocks.lazy.compactMap { block -> URL? in
-            guard case let .image(image) = block else { return nil }
-            return image.thumbnailURL ?? image.originalURL
-        }.prefix(3))
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(thread.title).font(.headline).lineLimit(2)
@@ -31,7 +29,7 @@ struct MacThreadRow: View {
                     HStack(spacing: 7) {
                         if let date {
                             Text("·").accessibilityHidden(true)
-                            Text(date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))
+                            Text(date, format: .relative(presentation: .named, unitsStyle: .abbreviated))
                         }
                         Text("·").accessibilityHidden(true)
                         Label("\(thread.replyCount)", systemImage: "bubble.right")
@@ -49,8 +47,8 @@ struct MacThreadRow: View {
 
             if !thumbnails.isEmpty {
                 HStack(spacing: 4) {
-                    ForEach(Array(thumbnails.enumerated()), id: \.offset) { _, url in
-                        MacRemoteImage(url: url, maximumPixelSize: 192, contentMode: .fill, placeholder: "photo")
+                    ForEach(thumbnails.indices, id: \.self) { index in
+                        MacRemoteImage(url: thumbnails[index], maximumPixelSize: 192, contentMode: .fill, placeholder: "photo")
                             .frame(width: 54, height: 54)
                             .background(.quaternary)
                             .clipShape(.rect(cornerRadius: 6))

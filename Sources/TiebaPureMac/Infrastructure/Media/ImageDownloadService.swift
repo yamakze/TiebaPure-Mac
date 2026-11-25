@@ -33,70 +33,57 @@ struct TiebaImageDownloadClient: Sendable {
     }
 
     func download(from url: URL) async throws -> TiebaImageDownloadPayload {
+        let (source, data, responseMIMEType) = try await validatedImage(from: url)
+        let typeIdentifier = CGImageSourceGetType(source) as String?
+        let mimeType = responseMIMEType ?? typeIdentifier.flatMap { UTType($0)?.preferredMIMEType } ?? "image/jpeg"
+        return TiebaImageDownloadPayload(
+            data: data,
+            mimeType: mimeType,
+            fileName: TiebaImageDownloadPolicy.fileName(for: url, mimeType: mimeType, typeIdentifier: typeIdentifier)
+        )
+    }
+
+    func validatedImage(from url: URL) async throws -> (source: CGImageSource, data: Data, mimeType: String?) {
+        try Task.checkCancellation()
+        let data: Data
+        let mimeType: String?
         if url.isFileURL {
-            return try await Task.detached(priority: .userInitiated) {
-                guard SavedThreadMediaAuthorization.shared.allows(url) else {
-                    throw TiebaImageDownloadError.invalidURL
+            guard SavedThreadMediaAuthorization.shared.allows(url) else {
+                throw TiebaImageDownloadError.invalidURL
+            }
+            data = try Data(contentsOf: url, options: [.mappedIfSafe, .uncached])
+            mimeType = nil
+        } else {
+            // Validate the effective URL because legacy image URLs may be upgraded to HTTPS.
+            guard let safeURL = TiebaURL.image(url.absoluteString),
+                  redirectScope.allows(safeURL) || Self.isSyntheticFixtureURL(safeURL) else {
+                throw TiebaImageDownloadError.invalidURL
+            }
+            let (bytes, response) = try await BoundedURLSession(session: session).data(
+                for: TiebaImageRequestPolicy.request(for: safeURL),
+                maximumBytes: Self.maximumImageBytes,
+                requiredMIMEPrefix: "image/",
+                responseValidator: { response in
+                    guard let http = response as? HTTPURLResponse else {
+                        throw TiebaImageDownloadError.invalidResponse
+                    }
+                    guard (200..<300).contains(http.statusCode) else {
+                        throw TiebaImageDownloadError.badStatus(http.statusCode)
+                    }
                 }
-                let data = try Data(contentsOf: url, options: [.mappedIfSafe, .uncached])
-                guard data.isEmpty == false,
-                      data.count <= TiebaImageDownloadClient.maximumImageBytes,
-                      let source = CGImageSourceCreateWithData(data as CFData, nil),
-                      CGImageSourceGetCount(source) > 0,
-                      TiebaImageDownloadPolicy.allows(source: source) else {
-                    throw TiebaImageDownloadError.invalidImageData
-                }
-                let typeIdentifier = CGImageSourceGetType(source) as String?
-                let mimeType = typeIdentifier.flatMap { UTType($0)?.preferredMIMEType }
-                    ?? "image/jpeg"
-                return TiebaImageDownloadPayload(
-                    data: data,
-                    mimeType: mimeType,
-                    fileName: TiebaImageDownloadPolicy.fileName(
-                        for: url,
-                        mimeType: mimeType,
-                        typeIdentifier: typeIdentifier
-                    )
-                )
-            }.value
-        }
-        // Request the validated URL, not the caller's: validation may have
-        // upgraded a legacy http source to https.
-        guard let safeURL = TiebaURL.image(url.absoluteString),
-              redirectScope.allows(safeURL) || Self.isSyntheticFixtureURL(safeURL) else {
-            throw TiebaImageDownloadError.invalidURL
+            )
+            data = bytes
+            mimeType = response.mimeType?.lowercased()
         }
 
-        var request = TiebaImageRequestPolicy.request(for: safeURL)
-        request.cachePolicy = .reloadIgnoringLocalCacheData
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: TiebaImageDownloadClient.maximumImageBytes,
-            requiredMIMEPrefix: "image/"
-        )
-        guard let response = response as? HTTPURLResponse else {
-            throw TiebaImageDownloadError.invalidResponse
-        }
-        guard (200...299).contains(response.statusCode) else {
-            throw TiebaImageDownloadError.badStatus(response.statusCode)
-        }
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+        try Task.checkCancellation()
+        guard !data.isEmpty, data.count <= Self.maximumImageBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
               CGImageSourceGetCount(source) > 0,
               TiebaImageDownloadPolicy.allows(source: source) else {
             throw TiebaImageDownloadError.invalidImageData
         }
-
-        let mimeType = response.mimeType?.lowercased() ?? "image/jpeg"
-        let typeIdentifier = CGImageSourceGetType(source) as String?
-        return TiebaImageDownloadPayload(
-            data: data,
-            mimeType: mimeType,
-            fileName: TiebaImageDownloadPolicy.fileName(
-                for: url,
-                mimeType: mimeType,
-                typeIdentifier: typeIdentifier
-            )
-        )
+        return (source, data, mimeType)
     }
 
     private static func makeSession() -> URLSession {
@@ -104,8 +91,7 @@ struct TiebaImageDownloadClient: Sendable {
         configuration.httpShouldSetCookies = false
         configuration.httpCookieStorage = nil
         configuration.urlCredentialStorage = nil
-        configuration.urlCache = nil
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.urlCache = URLCache(memoryCapacity: 16 * 1_024 * 1_024, diskCapacity: 0)
         configuration.timeoutIntervalForRequest = 20
         configuration.timeoutIntervalForResource = 60
         return SecureRemoteURLSession.make(

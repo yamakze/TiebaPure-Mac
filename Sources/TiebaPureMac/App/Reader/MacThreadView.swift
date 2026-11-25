@@ -237,8 +237,8 @@ struct MacContentBlocks: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { offset, block in
-                switch block {
+            ForEach(blocks.indices, id: \.self) { offset in
+                switch blocks[offset] {
                 case let .text(text):
                     Text(text).textSelection(.enabled)
                 case let .mention(_, text):
@@ -248,7 +248,7 @@ struct MacContentBlocks: View {
                     else { Text(title).textSelection(.enabled) }
                 case let .emoticon(code):
                     if let name = TiebaEmoticon.imageName(for: code), let url = TiebaEmoticon.remoteImageURL(imageName: name) {
-                        MacRemoteImage(url: url).frame(width: 28, height: 28)
+                        MacRemoteImage(url: url, maximumPixelSize: 64).frame(width: 28, height: 28)
                     } else { Text(TiebaEmoticon.displayText(for: code)) }
                 case let .image(image):
                     if let url = image.thumbnailURL ?? image.originalURL {
@@ -262,15 +262,15 @@ struct MacContentBlocks: View {
                             .frame(maxWidth: min(width, 812, 480 * ratio))
                             .overlay {
                                 MacRemoteImage(url: url, preview: (image.originalURL ?? url, { thumbnail in
-                                    let images: [(offset: Int, source: MacPreviewImage)] = blocks.enumerated().compactMap { index, block in
+                                    var images: [MacPreviewImage] = []
+                                    var selectedIndex = 0
+                                    for (index, block) in blocks.enumerated() {
                                         guard case let .image(content) = block,
-                                              let source = MacPreviewImage(content) else { return nil }
-                                        return (index, source)
+                                              let source = MacPreviewImage(content) else { continue }
+                                        if index == offset { selectedIndex = images.count }
+                                        images.append(source)
                                     }
-                                    if let index = images.firstIndex(where: { $0.offset == offset }) {
-                                        preview(MacImagePreviewSelection(images: images.map(\.source),
-                                                                         index: index, thumbnail: thumbnail))
-                                    }
+                                    preview(MacImagePreviewSelection(images: images, index: selectedIndex, thumbnail: thumbnail))
                                 }))
                                 .accessibilityIdentifier("post-image-\(offset)")
                             }

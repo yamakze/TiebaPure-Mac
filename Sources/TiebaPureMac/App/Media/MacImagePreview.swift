@@ -83,7 +83,6 @@ private struct MacImagePreviewPage: View {
     @Binding var zoom: CGFloat
     @State private var thumbnail: CGImage?
     @State private var fullSizeImage: CGImage?
-    @State private var thumbnailUnavailable = false
     @State private var failed = false
     @State private var retry = 0
 
@@ -114,13 +113,6 @@ private struct MacImagePreviewPage: View {
                 .background(.regularMaterial, in: Capsule())
                 .padding(12)
             } else if fullSizeImage == nil {
-                if thumbnailUnavailable {
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityHidden(true)
-                }
                 ProgressView()
                     .controlSize(.small)
                     .accessibilityLabel("正在加载大图")
@@ -129,24 +121,25 @@ private struct MacImagePreviewPage: View {
                     .padding(12)
             }
         }
-        .task {
-            // Only a separate thumbnail can arrive ahead of the full-size request.
-            guard thumbnail == nil, let url = source.thumbnailURL, url != source.fullSizeURL else { return }
-            do {
-                let image = try await ReaderImageLoader.thumbnail(url: url, maximumPixelSize: 1600)
-                try Task.checkCancellation()
-                if fullSizeImage == nil { thumbnail = image }
-            } catch {
-                if !Task.isCancelled { thumbnailUnavailable = true }
-            }
-        }
         .task(id: retry) {
+            let thumbnailURL = source.thumbnailURL
+            if thumbnail == nil, let thumbnailURL {
+                thumbnail = ReaderImageLoader.cachedImage(url: thumbnailURL, maximumPixelSize: 1600)
+            }
             do {
                 let loaded = try await ReaderImageLoader.thumbnail(url: source.fullSizeURL, maximumPixelSize: 4096)
                 try Task.checkCancellation()
                 fullSizeImage = loaded
                 thumbnail = nil
             } catch {
+                guard !Task.isCancelled else { return }
+                if thumbnail == nil, let thumbnailURL, thumbnailURL != source.fullSizeURL {
+                    do {
+                        thumbnail = try await ReaderImageLoader.thumbnail(url: thumbnailURL, maximumPixelSize: 1600)
+                    } catch {
+                        // The original failure remains visible even when a fallback is unavailable.
+                    }
+                }
                 if !Task.isCancelled { failed = true }
             }
         }
