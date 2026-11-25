@@ -136,8 +136,6 @@ jobs:
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: python3 scripts/release-assets.py "$RELEASE_TAG" artifacts/macos/TiebaPure-Mac.app
-      - name: Include complete changelog
-        run: cp CHANGELOG.md "artifacts/release/$RELEASE_TAG/"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos-release
@@ -148,12 +146,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: macos-release
-          path: release
+      - name: Download release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name macos-release --dir release
       - name: Create or update release draft
         working-directory: release
         env:
@@ -170,7 +169,7 @@ jobs:
               notes += '\n\n' + Path('PACKAGE_NOTES.md').read_text()
           Path('notes.md').write_text(notes)
           PY
-          assets=("TiebaPure-Mac-$version.zip" SHA256SUMS.txt CHANGELOG.md)
+          assets=("TiebaPure-Mac-$version.zip" SHA256SUMS.txt)
           if [[ -f appcast.xml ]]; then assets+=(appcast.xml); fi
           owner=${GH_REPO%%/*}
           repo=${GH_REPO#*/}
