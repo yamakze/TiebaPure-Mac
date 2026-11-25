@@ -10,13 +10,10 @@ cask "tiebapure-mac" do
 
   livecheck do
     url :url
-    regex(/^v(\d+\.\d+\.\d+)$/i)
-    strategy :github_releases do |json, regex|
-      json.filter_map { |release| release["tag_name"]&.[](regex, 1) unless release["draft"] }
-    end
+    strategy :github_latest
   end
 
-  depends_on arch: :arm64, macos: ">= :sonoma"
+  depends_on arch: :arm64, macos: :sonoma
 
   app "TiebaPure-Mac.app"
 end

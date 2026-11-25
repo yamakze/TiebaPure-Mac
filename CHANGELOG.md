@@ -1,11 +1,11 @@
 # Changelog
 
-## 0.1.1 — 2026-11-25 (GitHub Preview)
+## 0.1.1 — 2026-11-25
 
 - 修复新关注贴吧的封面被覆盖的问题。关注列表刷新后会保留服务端返回的封面。
 - 对齐首页、搜索、收藏夹和帖子详情的滚动条，滚动时使用系统原生滚动指示器。放大图片预览窗口。
 - 改进连续分页、滚动位置恢复和图片解码复用。过滤掉整页内容后仍能继续读取下一页。
-- 最近访问和搜索历史启用新的本地数据库。升级后这两类记录从空白开始，已保存的账号和服务端收藏仍可使用。
+- 最近访问和搜索历史启用新的本地数据库。升级后这两类记录从空白开始。
 - 本版支持 macOS 14 及以上的 Apple Silicon Mac。
 
 ### English
@@ -13,7 +13,7 @@
 - Preserve server-provided covers when refreshing newly followed forums.
 - Align native scroll indicators across Home, Search, Favorites, and thread views. Enlarge the image preview window.
 - Improve continuous pagination, scroll restoration, and image decode reuse. The reader can continue after an entire page is filtered out.
-- Start recent forums and search history in a new local database. Saved accounts and server-side bookmarks remain available after upgrading.
+- Start recent forums and search history in a new local database after upgrading.
 - This build supports Apple Silicon Macs running macOS 14 or later.
 
 ## 0.1.0 — 2026-11-24 (GitHub Preview)

@@ -29,11 +29,12 @@ scripts/compile_and_run.sh debug
 
 ## 发布
 
-GitHub 试用版使用 `CODE_SIGN_IDENTITY=- make release` 构建 Apple Silicon 包，以 GitHub Pre-release 分发 ZIP 和 SHA-256。下载说明应注明 ad-hoc 签名、公证和更新状态。未配置 `MACOS_SIGN_IDENTITY` 时，推送标签不会启动 Developer ID 构建。
+应用版本、构建号和对应的双语 `CHANGELOG.md` 小节需要在打标签前准备好。发布标签使用 `vX.Y.Z`，每次发布递增 `CFBundleVersion`。
 
-正式版发布流程
+无 Developer ID 时，使用通过 CI 验证的 Apple Silicon ad-hoc 签名包，在 GitHub Releases 分发 ZIP 和 `SHA256SUMS.txt`。下载说明注明签名、公证和更新状态。未配置 `MACOS_SIGN_IDENTITY` 时，推送标签会跳过 Developer ID 构建。这类构建可标为 Latest，由用户手动下载或通过 Homebrew 更新。
 
-1. 更新 `CHANGELOG.md` 对应版本小节、`Resources/Info.plist` 中的 `CFBundleShortVersionString`，并递增 `CFBundleVersion`。发布标签使用 `vX.Y.Z`。
-2. 首次发布时，使用 `.build/artifacts/sparkle/Sparkle/bin/generate_keys --account TiebaPure-Mac` 建立独立的更新密钥。公钥可提交到 `Resources/SparklePublicKey.txt`，也可通过仓库变量 `SPARKLE_PUBLIC_KEY` 覆盖。仓库 Secret `SPARKLE_PRIVATE_KEY` 保存对应的私钥。用同一命令加 `-x <private-key-file>` 导出供 Secret 导入的私钥，导入后删除临时文件。后续发布沿用同一套密钥。
-3. 配置 `MACOS_SIGN_IDENTITY` 仓库变量，以及 `MACOS_CERTIFICATE_P12`（Base64）、`MACOS_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 仓库 Secrets。推送版本标签后，发布工作流构建 Apple Silicon 应用，完成 Developer ID 签名和公证，再生成签名更新源和校验文件。
-4. 审查 GitHub Release 草稿并验证安装后，将正式版本发布为 Latest。稳定更新源使用该 Release 的 `appcast.xml`，请保留其签名以及同批次的 ZIP。
+公证签名和 Sparkle 更新源的发布流程
+
+1. 首次发布时，使用 `.build/artifacts/sparkle/Sparkle/bin/generate_keys --account TiebaPure-Mac` 建立独立的更新密钥。公钥可提交到 `Resources/SparklePublicKey.txt`，也可通过仓库变量 `SPARKLE_PUBLIC_KEY` 覆盖。仓库 Secret `SPARKLE_PRIVATE_KEY` 保存对应的私钥。用同一命令加 `-x <private-key-file>` 导出供 Secret 导入的私钥，导入后删除临时文件。后续发布沿用同一套密钥。
+2. 配置 `MACOS_SIGN_IDENTITY` 仓库变量，以及 `MACOS_CERTIFICATE_P12`（Base64）、`MACOS_CERTIFICATE_PASSWORD`、`APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD` 仓库 Secrets。推送版本标签后，发布工作流构建 Apple Silicon 应用，完成 Developer ID 签名和公证，再生成签名更新源和校验文件。
+3. 审查 GitHub Release 草稿并验证安装后，将版本发布为 Latest。稳定更新源使用该 Release 的 `appcast.xml`，请保留其签名以及同批次的 ZIP。
