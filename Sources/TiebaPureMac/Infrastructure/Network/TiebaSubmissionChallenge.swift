@@ -19,11 +19,11 @@ struct TiebaWebSubmissionChallengePayload: Decodable {
 
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                textImage = container.challengeString(forKey: .textImage)
-                slideImage = container.challengeString(forKey: .slideImage)
-                endpoint = container.challengeString(forKey: .endpoint)
-                successImage = container.challengeString(forKey: .successImage)
-                slideEndpoint = container.challengeString(forKey: .slideEndpoint)
+                textImage = container.decodeStringOrScalar(forKey: .textImage)
+                slideImage = container.decodeStringOrScalar(forKey: .slideImage)
+                endpoint = container.decodeStringOrScalar(forKey: .endpoint)
+                successImage = container.decodeStringOrScalar(forKey: .successImage)
+                slideEndpoint = container.decodeStringOrScalar(forKey: .slideEndpoint)
             }
         }
 
@@ -52,13 +52,13 @@ struct TiebaWebSubmissionChallengePayload: Decodable {
 
             init(from decoder: Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                canPost = container.challengeString(forKey: .canPost)
-                canPostAgain = container.challengeString(forKey: .canPostAgain)
-                forbidFlag = container.challengeString(forKey: .forbidFlag)
-                forbidInformation = container.challengeString(forKey: .forbidInformation)
-                blockState = container.challengeString(forKey: .blockState)
-                hideState = container.challengeString(forKey: .hideState)
-                verificationState = container.challengeString(forKey: .verificationState)
+                canPost = container.decodeStringOrScalar(forKey: .canPost)
+                canPostAgain = container.decodeStringOrScalar(forKey: .canPostAgain)
+                forbidFlag = container.decodeStringOrScalar(forKey: .forbidFlag)
+                forbidInformation = container.decodeStringOrScalar(forKey: .forbidInformation)
+                blockState = container.decodeStringOrScalar(forKey: .blockState)
+                hideState = container.decodeStringOrScalar(forKey: .hideState)
+                verificationState = container.decodeStringOrScalar(forKey: .verificationState)
                 daysToFree = container.challengeInt(forKey: .daysToFree)
                 hasChance = container.challengeBool(forKey: .hasChance)
             }
@@ -96,25 +96,25 @@ struct TiebaWebSubmissionChallengePayload: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            needVerification = container.challengeString(forKey: .needVerification)
-            verificationMD5 = container.challengeString(forKey: .verificationMD5)
-            previousVerificationType = container.challengeString(forKey: .previousVerificationType)
-            verificationType = container.challengeString(forKey: .verificationType)
-            passToken = container.challengeString(forKey: .passToken)
-            blockContent = container.challengeString(forKey: .blockContent)
-            blockCancel = container.challengeString(forKey: .blockCancel)
-            blockConfirm = container.challengeString(forKey: .blockConfirm)
-            pictureURL = container.challengeString(forKey: .pictureURL)
+            needVerification = container.decodeStringOrScalar(forKey: .needVerification)
+            verificationMD5 = container.decodeStringOrScalar(forKey: .verificationMD5)
+            previousVerificationType = container.decodeStringOrScalar(forKey: .previousVerificationType)
+            verificationType = container.decodeStringOrScalar(forKey: .verificationType)
+            passToken = container.decodeStringOrScalar(forKey: .passToken)
+            blockContent = container.decodeStringOrScalar(forKey: .blockContent)
+            blockCancel = container.decodeStringOrScalar(forKey: .blockCancel)
+            blockConfirm = container.decodeStringOrScalar(forKey: .blockConfirm)
+            pictureURL = container.decodeStringOrScalar(forKey: .pictureURL)
             extra = try? container.decodeIfPresent(Extra.self, forKey: .extra)
             antiState = try? container.decodeIfPresent(AntiState.self, forKey: .antiState)
-            extensionMessage = container.challengeString(forKey: .extensionMessage)
+            extensionMessage = container.decodeStringOrScalar(forKey: .extensionMessage)
             toastMessage = Self.decodeToast(from: container)
         }
 
         private static func decodeToast(
             from container: KeyedDecodingContainer<CodingKeys>
         ) -> String? {
-            if let value = container.challengeString(forKey: .toast) {
+            if let value = container.decodeStringOrScalar(forKey: .toast) {
                 return value
             }
             guard let toast = try? container.nestedContainer(
@@ -125,7 +125,7 @@ struct TiebaWebSubmissionChallengePayload: Decodable {
             }
             for key in ["content", "text", "message", "msg"] {
                 guard let codingKey = DynamicCodingKey(stringValue: key) else { continue }
-                if let value = toast.challengeString(forKey: codingKey) {
+                if let value = toast.decodeStringOrScalar(forKey: codingKey) {
                     return value
                 }
             }
@@ -373,25 +373,6 @@ private extension String {
 }
 
 private extension KeyedDecodingContainer {
-    func challengeString(forKey key: Key) -> String? {
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return value
-        }
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(UInt64.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
-            return value ? "1" : "0"
-        }
-        return nil
-    }
-
     func challengeInt(forKey key: Key) -> Int? {
         if let value = try? decodeIfPresent(Int.self, forKey: key) {
             return value

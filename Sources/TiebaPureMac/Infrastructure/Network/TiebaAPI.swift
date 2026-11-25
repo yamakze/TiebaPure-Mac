@@ -1074,25 +1074,6 @@ enum TiebaPaginationPolicy {
 }
 
 private extension KeyedDecodingContainer {
-    func decodeStringIfPresent(forKey key: Key) -> String? {
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return value
-        }
-        if let value = try? decodeIfPresent(Int.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Decimal.self, forKey: key) {
-            return NSDecimalNumber(decimal: value).stringValue
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) {
-            return String(value)
-        }
-        return nil
-    }
-
     func decodeDateIfPresent(forKey key: Key) -> Date? {
         guard let text = decodeStringIfPresent(forKey: key), let seconds = TimeInterval(text) else {
             return nil

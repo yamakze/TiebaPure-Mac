@@ -504,6 +504,26 @@ final class UserProfileTests: XCTestCase {
         XCTAssertEqual(requestedPaths, ["/c/s/login", "/c/c/forum/like"])
     }
 
+    func testForumFollowDoesNotUseStoredTBSAfterExplicitSessionExpiry() async throws {
+        let api = makeSocialAPI { request in
+            switch request.url?.path {
+            case "/c/s/login":
+                return Data(#"{"error_code":110001,"error_msg":"登录已失效"}"#.utf8)
+            case "/mo/q/newmoindex":
+                return Data(#"{"data":{"is_login":true}}"#.utf8)
+            default:
+                XCTFail("Expired credentials must not send a mutation.")
+                return Data()
+            }
+        }
+        do {
+            _ = try await api.setForumFollowed(account: makeAccount(), forum: makeForum(), followed: true)
+            XCTFail("Expected the explicit session expiry.")
+        } catch {
+            XCTAssertEqual(error as? TiebaAPIError, .sessionExpired(code: 110001, message: "登录已失效"))
+        }
+    }
+
     func testForumFollowReadsMembershipAfterAcceptedWrite() async throws {
         var paths: [String] = []
         let api = makeSocialAPI { request in

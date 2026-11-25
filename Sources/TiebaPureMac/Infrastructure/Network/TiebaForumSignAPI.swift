@@ -85,10 +85,10 @@ struct ForumSignResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            isSignedIn = container.flexibleInt(forKey: .isSignedIn) != 0
-            bonusPoints = container.flexibleInt(forKey: .bonusPoints)
-            continuousDays = container.flexibleInt(forKey: .continuousDays)
-            rank = container.flexibleInt(forKey: .rank)
+            isSignedIn = container.flexibleSignInt(forKey: .isSignedIn) != 0
+            bonusPoints = container.flexibleSignInt(forKey: .bonusPoints)
+            continuousDays = container.flexibleSignInt(forKey: .continuousDays)
+            rank = container.flexibleSignInt(forKey: .rank)
         }
     }
 
@@ -111,18 +111,7 @@ struct ForumSignResponseDTO: Decodable {
 }
 
 private extension KeyedDecodingContainer {
-    func requiredFlexibleInt(forKey key: Key) throws -> Int {
-        if let value = try? decode(Int.self, forKey: key) { return value }
-        if let value = try? decode(Int64.self, forKey: key) { return Int(clamping: value) }
-        if let value = try? decode(String.self, forKey: key), let number = Int(value) { return number }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: self,
-            debugDescription: "Expected a numeric business status code"
-        )
-    }
-
-    func flexibleInt(forKey key: Key) -> Int {
+    func flexibleSignInt(forKey key: Key) -> Int {
         if let value = try? decode(Int.self, forKey: key) { return value }
         if let value = try? decode(Int64.self, forKey: key) { return Int(clamping: value) }
         if let value = try? decode(Bool.self, forKey: key) { return value ? 1 : 0 }

@@ -104,8 +104,7 @@ final class AnonymousLiveSmokeTests: XCTestCase {
                 page: page,
                 sortType: 5,
                 filterType: 2,
-                forumName: nil,
-                pageSize: 30
+                forumName: nil
             )
             mediaResult = results.results.first(where: { result in
                 result.blocks.contains(where: \ContentBlock.isMedia)

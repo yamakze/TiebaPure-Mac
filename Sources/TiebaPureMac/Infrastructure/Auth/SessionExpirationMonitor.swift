@@ -80,16 +80,14 @@ struct SessionMonitoringTiebaAPI: TiebaAPIService {
         page: Int,
         sortType: Int,
         filterType: Int,
-        forumName: String?,
-        pageSize: Int
+        forumName: String?
     ) async throws -> SearchResultsPage {
         try await base.searchThreads(
             keyword: keyword,
             page: page,
             sortType: sortType,
             filterType: filterType,
-            forumName: forumName,
-            pageSize: pageSize
+            forumName: forumName
         )
     }
 

@@ -15,8 +15,7 @@ protocol TiebaAPIService {
         page: Int,
         sortType: Int,
         filterType: Int,
-        forumName: String?,
-        pageSize: Int
+        forumName: String?
     ) async throws -> SearchResultsPage
     func resolveUser(named name: String) async throws -> UserSummary
     func threadPage(
@@ -132,8 +131,7 @@ extension TiebaAPIService {
             page: page,
             sortType: order == .latest ? 5 : 2,
             filterType: 2,
-            forumName: forumName,
-            pageSize: 30
+            forumName: forumName
         )
     }
 

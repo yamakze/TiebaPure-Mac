@@ -62,7 +62,7 @@ enum ReaderErrorMessage {
             return "请求参数无效，无法继续加载。"
         }
 
-        if case let TiebaHTTPError.badStatus(code, _) = error {
+        if case let TiebaHTTPError.badStatus(code) = error {
             return code == 401 || code == 403
                 ? "当前请求未获授权，请重新登录或稍后重试。"
                 : "服务器暂时不可用（\(code)），请稍后重试。"

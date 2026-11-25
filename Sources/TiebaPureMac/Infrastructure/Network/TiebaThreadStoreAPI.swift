@@ -133,17 +133,17 @@ struct ThreadStoreListResponseDTO: Decodable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             // The payload carries the same thread under both keys; either one
             // alone is enough to open it.
-            let tid = container.storeFlexibleInt64(forKey: .tid)
-            threadID = tid != 0 ? tid : container.storeFlexibleInt64(forKey: .id)
-            forumID = container.storeFlexibleInt64(forKey: .forumID)
+            let tid = container.flexibleInt64(forKey: .tid)
+            threadID = tid != 0 ? tid : container.flexibleInt64(forKey: .id)
+            forumID = container.flexibleInt64(forKey: .forumID)
             forumName = container.storeStringIfPresent(forKey: .forumName) ?? ""
             title = container.storeStringIfPresent(forKey: .title) ?? ""
             let author = try? container.decodeIfPresent(AuthorDTO.self, forKey: .author)
             authorDisplayName = author.map { $0.displayName.isEmpty ? $0.name : $0.displayName } ?? ""
             replyCount = container.storeFlexibleInt(forKey: .replyCount)
-            let timestamp = container.storeFlexibleInt64(forKey: .lastReplyAt)
+            let timestamp = container.flexibleInt64(forKey: .lastReplyAt)
             lastReplyAt = timestamp > 0 ? Date(timeIntervalSince1970: TimeInterval(timestamp)) : nil
-            let markedPostID = container.storeFlexibleInt64(forKey: .markedPostID)
+            let markedPostID = container.flexibleInt64(forKey: .markedPostID)
             self.markedPostID = markedPostID > 0 ? UInt64(markedPostID) : nil
         }
 
@@ -275,13 +275,6 @@ private extension KeyedDecodingContainer {
         if let value = try? decode(Int.self, forKey: key) { return value }
         if let value = try? decode(Bool.self, forKey: key) { return value ? 1 : 0 }
         if let value = try? decode(String.self, forKey: key) { return Int(value) ?? 0 }
-        return 0
-    }
-
-    func storeFlexibleInt64(forKey key: Key) -> Int64 {
-        if let value = try? decode(Int64.self, forKey: key) { return value }
-        if let value = try? decode(Int.self, forKey: key) { return Int64(value) }
-        if let value = try? decode(String.self, forKey: key) { return Int64(value) ?? 0 }
         return 0
     }
 }

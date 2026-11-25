@@ -331,17 +331,6 @@ struct ForumMembershipResponseDTO: Decodable {
 
 extension TiebaAPI {
     func refreshedClientTBS(for account: Account) async throws -> String {
-        try await refreshedClientTBS(for: account, allowsStoredFallback: true)
-    }
-
-    func strictlyRefreshedClientTBS(for account: Account) async throws -> String {
-        try await refreshedClientTBS(for: account, allowsStoredFallback: false)
-    }
-
-    private func refreshedClientTBS(
-        for account: Account,
-        allowsStoredFallback: Bool
-    ) async throws -> String {
         var clientError: Error?
         var webError: Error?
 
@@ -414,12 +403,13 @@ extension TiebaAPI {
             webError = error
         }
 
-        if allowsStoredFallback {
-            let storedTBS = account.tbs.trimmingCharacters(in: .whitespacesAndNewlines)
-            if storedTBS.isEmpty == false {
-                return storedTBS
-            }
+        // A fresh web TBS can still confirm the cookies. Without it, an explicit
+        // expiry takes precedence over a TBS left over from the stored session.
+        if let apiError = clientError as? TiebaAPIError, case .sessionExpired = apiError {
+            throw apiError
         }
+        let storedTBS = account.tbs.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !storedTBS.isEmpty { return storedTBS }
         if let clientError {
             throw clientError
         }
@@ -604,39 +594,4 @@ extension TiebaAPI {
 }
 
 private extension KeyedDecodingContainer {
-    func decodeStringIfPresent(forKey key: Key) -> String? {
-        if let value = try? decodeIfPresent(String.self, forKey: key) { return value }
-        if let value = try? decodeIfPresent(Int.self, forKey: key) { return String(value) }
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) { return String(value) }
-        if let value = try? decodeIfPresent(Decimal.self, forKey: key) {
-            return NSDecimalNumber(decimal: value).stringValue
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) { return String(value) }
-        return nil
-    }
-
-    func requiredFlexibleInt(forKey key: Key) throws -> Int {
-        if let value = try? decode(Int.self, forKey: key) { return value }
-        if let value = try? decode(Int64.self, forKey: key) { return Int(clamping: value) }
-        if let value = try? decode(String.self, forKey: key), let number = Int(value) { return number }
-        throw DecodingError.dataCorruptedError(
-            forKey: key,
-            in: self,
-            debugDescription: "Expected a numeric business status code"
-        )
-    }
-
-    func flexibleInt(forKey key: Key) -> Int {
-        if let value = try? decode(Int.self, forKey: key) { return value }
-        if let value = try? decode(Int64.self, forKey: key) { return Int(clamping: value) }
-        if let value = try? decode(String.self, forKey: key) { return Int(value) ?? 0 }
-        return 0
-    }
-
-    func flexibleInt64(forKey key: Key) -> Int64 {
-        if let value = try? decode(Int64.self, forKey: key) { return value }
-        if let value = try? decode(Int.self, forKey: key) { return Int64(value) }
-        if let value = try? decode(String.self, forKey: key) { return Int64(value) ?? 0 }
-        return 0
-    }
 }

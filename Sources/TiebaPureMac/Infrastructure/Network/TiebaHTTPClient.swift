@@ -41,11 +41,7 @@ struct TiebaHTTPClient {
         request.setValue(headers["User-Agent"] ?? "tieba/12.52.1.0 skin/default", forHTTPHeaderField: "User-Agent")
         headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
 
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: maximumResponseBytes
-        )
-        try validate(response: response, data: data)
+        let data = try await responseData(for: request)
         return try JSONDecoder().decode(type, from: data)
     }
 
@@ -88,11 +84,7 @@ struct TiebaHTTPClient {
             .joined(separator: "&")
             .data(using: .utf8)
 
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: maximumResponseBytes
-        )
-        try validate(response: response, data: data)
+        let data = try await responseData(for: request)
         return data
     }
 
@@ -110,26 +102,29 @@ struct TiebaHTTPClient {
         headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         request.httpBody = body
 
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: maximumResponseBytes
-        )
-        try validate(response: response, data: data)
+        let data = try await responseData(for: request)
         return try Response(serializedBytes: data)
     }
 
-    private func validate(response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else { throw TiebaHTTPError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw TiebaHTTPError.badStatus(code: http.statusCode, body: data)
-        }
+    private func responseData(for request: URLRequest) async throws -> Data {
+        let (data, _) = try await BoundedURLSession(session: session).data(
+            for: request,
+            maximumBytes: maximumResponseBytes,
+            responseValidator: { response in
+                guard let http = response as? HTTPURLResponse else { throw TiebaHTTPError.invalidResponse }
+                guard (200..<300).contains(http.statusCode) else {
+                    throw TiebaHTTPError.badStatus(code: http.statusCode)
+                }
+            }
+        )
+        return data
     }
 }
 
 enum TiebaHTTPError: Error, Equatable {
     case invalidURL
     case invalidResponse
-    case badStatus(code: Int, body: Data)
+    case badStatus(code: Int)
     case responseTooLarge(limit: Int)
     case invalidMIMEType(String?)
 }
@@ -151,8 +146,12 @@ struct BoundedURLSession: Sendable {
         onProgress: (@Sendable (BoundedURLSessionProgress) async -> Void)? = nil
     ) async throws -> (Data, URLResponse) {
         precondition(maximumBytes > 0)
+        try Task.checkCancellation()
         let (bytes, response) = try await session.bytes(for: request)
-
+        defer {
+            if bytes.task.state == .running { bytes.task.cancel() }
+        }
+        try Task.checkCancellation()
         try responseValidator?(response)
 
         if enforcesDeclaredContentLength,

@@ -9,6 +9,7 @@ enum TiebaClientVersion: String {
 }
 
 struct TiebaRequestBuilder {
+    private static let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
     static let boundary = "--------7da3d81520810*"
 
     var screenScale: Double
@@ -34,7 +35,7 @@ struct TiebaRequestBuilder {
         request.clientID = clientID
         request.clientType = 2
         request.clientVersion = TiebaClientVersion.v12.rawValue
-        request.osVersion = ProcessInfo.processInfo.operatingSystemVersionString
+        request.osVersion = Self.osVersion
         request.timestamp = Int64(Date().timeIntervalSince1970 * 1000)
         request.brand = "Apple"
         request.cuid = clientID
@@ -61,7 +62,7 @@ struct TiebaRequestBuilder {
             "_client_id": clientID,
             "_client_type": "2",
             "_client_version": TiebaClientVersion.mini.rawValue,
-            "_os_version": ProcessInfo.processInfo.operatingSystemVersionString,
+            "_os_version": Self.osVersion,
             "_phone_imei": "000000000000000",
             "cuid": cuid,
             "cuid_galaxy2": cuid,
@@ -84,7 +85,7 @@ struct TiebaRequestBuilder {
             "_client_id": clientID,
             "_client_type": "2",
             "_client_version": clientVersion,
-            "_os_version": ProcessInfo.processInfo.operatingSystemVersionString,
+            "_os_version": Self.osVersion,
             "_phone_imei": "000000000000000",
             "active_timestamp": "\(timestamp)",
             "brand": "Apple",

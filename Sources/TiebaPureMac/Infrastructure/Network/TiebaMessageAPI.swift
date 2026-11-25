@@ -41,22 +41,6 @@ enum MessagePaginationPolicy {
     }
 }
 
-/// Lives outside TiebaEndpoint because enum cases cannot be added from an
-/// extension; the URLs still derive from the shared API hosts.
-enum TiebaMessageEndpoint {
-    case replyMe
-    case atMe
-
-    var url: URL {
-        switch self {
-        case .replyMe:
-            return TiebaEndpoint.appBase.appending(path: "/c/u/feed/replyme")
-        case .atMe:
-            return TiebaEndpoint.appBase.appending(path: "/c/u/feed/atme")
-        }
-    }
-}
-
 enum TiebaMessageRequestFactory {
     /// The legacy message feed requires the 8.2.2 client profile.
     static let clientVersion = "8.2.2"
@@ -286,7 +270,7 @@ extension TiebaAPI {
             page: page,
             requestBuilder: requestBuilder
         )
-        let endpoint: TiebaMessageEndpoint = kind == .reply ? .replyMe : .atMe
+        let endpoint: TiebaEndpoint = kind == .reply ? .replyNotifications : .mentionNotifications
         let response = try await client.postForm(
             endpoint,
             fields: fields,
@@ -309,54 +293,6 @@ extension TiebaAPI {
     }
 }
 
-extension TiebaHTTPClient {
-    /// Mirrors postForm(_:fields:headers:signingSecret:as:) for message
-    /// endpoints, which live outside the TiebaEndpoint enum.
-    func postForm<T: Decodable>(
-        _ endpoint: TiebaMessageEndpoint,
-        fields: [String: String],
-        headers: [String: String] = [:],
-        signingSecret: String,
-        as type: T.Type
-    ) async throws -> T {
-        var request = URLRequest(url: endpoint.url)
-        var requestFields = fields
-        if requestFields["sign"] == nil {
-            requestFields["sign"] = TiebaFormSigner.sign(fields: requestFields, secret: signingSecret)
-        }
-
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
-        request.httpBody = requestFields
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key.messageFormEscaped)=\($0.value.messageFormEscaped)" }
-            .joined(separator: "&")
-            .data(using: .utf8)
-
-        let (data, response) = try await BoundedURLSession(session: session).data(
-            for: request,
-            maximumBytes: maximumResponseBytes
-        )
-        guard let http = response as? HTTPURLResponse else { throw TiebaHTTPError.invalidResponse }
-        guard (200..<300).contains(http.statusCode) else {
-            throw TiebaHTTPError.badStatus(code: http.statusCode, body: data)
-        }
-        return try JSONDecoder().decode(T.self, from: data)
-    }
-}
-
-private extension String {
-    // Same escaping rules as the form encoder in TiebaHTTPClient.swift,
-    // whose helper is file-private there.
-    var messageFormEscaped: String {
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: "&+=?")
-        return addingPercentEncoding(withAllowedCharacters: allowed)?
-            .replacingOccurrences(of: "%20", with: "+") ?? self
-    }
-}
-
 private extension KeyedDecodingContainer {
     func flexibleString(forKey key: Key) -> String? {
         if let value = try? decodeIfPresent(String.self, forKey: key) {
@@ -371,19 +307,7 @@ private extension KeyedDecodingContainer {
         return nil
     }
 
-    func flexibleInt(forKey key: Key) -> Int {
-        if let value = try? decode(Int.self, forKey: key) { return value }
-        if let value = try? decode(Int64.self, forKey: key) { return Int(clamping: value) }
-        if let value = try? decode(String.self, forKey: key) { return Int(value) ?? 0 }
-        return 0
-    }
 
-    func flexibleInt64(forKey key: Key) -> Int64 {
-        if let value = try? decode(Int64.self, forKey: key) { return value }
-        if let value = try? decode(Int.self, forKey: key) { return Int64(value) }
-        if let value = try? decode(String.self, forKey: key) { return Int64(value) ?? 0 }
-        return 0
-    }
 
     func flexibleUInt64(forKey key: Key) -> UInt64 {
         if let value = try? decode(UInt64.self, forKey: key) { return value }

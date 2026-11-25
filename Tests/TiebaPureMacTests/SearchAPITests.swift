@@ -8,6 +8,18 @@ final class SearchAPITests: XCTestCase {
         super.tearDown()
     }
 
+    func testHTTPStatusTakesPrecedenceOverOversizedErrorBody() async throws {
+        let api = makeAPI(status: 503, maximumResponseBytes: 8) { _ in
+            Data("Server unavailable".utf8)
+        }
+        do {
+            _ = try await api.searchThreads(keyword: "Swift", page: 1)
+            XCTFail("Expected an HTTP status error")
+        } catch {
+            XCTAssertEqual(error as? TiebaHTTPError, .badStatus(code: 503))
+        }
+    }
+
     func testGlobalSearchMapsReplyResultAndMedia() async throws {
         let api = makeAPI { request in
             let components = try XCTUnwrap(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false))
@@ -609,12 +621,17 @@ final class SearchAPITests: XCTestCase {
         }
     }
 
-    private func makeAPI(handler: @escaping (URLRequest) throws -> Data) -> TiebaAPI {
+    private func makeAPI(
+        status: Int = 200,
+        maximumResponseBytes: Int = TiebaHTTPClient.maximumAPIResponseBytes,
+        handler: @escaping (URLRequest) throws -> Data
+    ) -> TiebaAPI {
         SearchMockURLProtocol.handler = handler
+        SearchMockURLProtocol.status = status
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [SearchMockURLProtocol.self]
         let session = URLSession(configuration: configuration)
-        return TiebaAPI(client: TiebaHTTPClient(session: session))
+        return TiebaAPI(client: TiebaHTTPClient(session: session, maximumResponseBytes: maximumResponseBytes))
     }
 
     private static func forumProtobufRequest(
@@ -773,6 +790,7 @@ final class SearchAPITests: XCTestCase {
 
 private final class SearchMockURLProtocol: URLProtocol {
     static var handler: ((URLRequest) throws -> Data)?
+    static var status = 200
 
     override class func canInit(with request: URLRequest) -> Bool {
         true
@@ -787,9 +805,9 @@ private final class SearchMockURLProtocol: URLProtocol {
             let data = try XCTUnwrap(Self.handler)(request)
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
-                statusCode: 200,
+                statusCode: Self.status,
                 httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
+                headerFields: ["Content-Type": "application/json", "Content-Length": String(data.count)]
             )!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)

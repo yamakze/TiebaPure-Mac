@@ -194,8 +194,7 @@ struct FixtureTiebaAPI: TiebaAPIService {
         page: Int,
         sortType: Int,
         filterType: Int,
-        forumName: String?,
-        pageSize: Int
+        forumName: String?
     ) async throws -> SearchResultsPage {
         if scenario == .slow || keyword == "慢请求" {
             try await Task.sleep(nanoseconds: max(delayNanoseconds, 900_000_000))

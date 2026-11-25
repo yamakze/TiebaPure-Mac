@@ -854,7 +854,7 @@ private actor ControlledSubmissionAPISpy: TiebaAPIService {
     func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage { fatalError("unused") }
     func followedForums(account: Account) async throws -> [Forum] { fatalError("unused") }
     func forumThreads(account: Account?, forumName: String, page: Int, category: ForumThreadCategory) async throws -> ThreadListPage { fatalError("unused") }
-    func searchThreads(keyword: String, page: Int, sortType: Int, filterType: Int, forumName: String?, pageSize: Int) async throws -> SearchResultsPage { fatalError("unused") }
+    func searchThreads(keyword: String, page: Int, sortType: Int, filterType: Int, forumName: String?) async throws -> SearchResultsPage { fatalError("unused") }
     func resolveUser(named name: String) async throws -> UserSummary { fatalError("unused") }
     func threadPage(account: Account?, threadID: Int64, page: Int, forumID: Int64?, postID: UInt64?, seeLz: Bool, sortType: ThreadReplySort) async throws -> ThreadPage { fatalError("unused") }
     func subposts(account: Account?, threadID: Int64, postID: UInt64, forumID: Int64, page: Int, subpostID: UInt64) async throws -> [Subpost] { fatalError("unused") }
@@ -904,7 +904,7 @@ private actor SubmissionAPISpy: TiebaAPIService {
     func personalizedThreads(account: Account?, page: Int, loadType: Int) async throws -> ThreadListPage { fatalError("unused") }
     func followedForums(account: Account) async throws -> [Forum] { fatalError("unused") }
     func forumThreads(account: Account?, forumName: String, page: Int, category: ForumThreadCategory) async throws -> ThreadListPage { fatalError("unused") }
-    func searchThreads(keyword: String, page: Int, sortType: Int, filterType: Int, forumName: String?, pageSize: Int) async throws -> SearchResultsPage { fatalError("unused") }
+    func searchThreads(keyword: String, page: Int, sortType: Int, filterType: Int, forumName: String?) async throws -> SearchResultsPage { fatalError("unused") }
     func resolveUser(named name: String) async throws -> UserSummary { fatalError("unused") }
     func threadPage(account: Account?, threadID: Int64, page: Int, forumID: Int64?, postID: UInt64?, seeLz: Bool, sortType: ThreadReplySort) async throws -> ThreadPage { fatalError("unused") }
     func subposts(account: Account?, threadID: Int64, postID: UInt64, forumID: Int64, page: Int, subpostID: UInt64) async throws -> [Subpost] { fatalError("unused") }

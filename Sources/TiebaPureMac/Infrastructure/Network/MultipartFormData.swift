@@ -32,11 +32,11 @@ final class MultipartFormData {
 
     func finalize() -> Data {
         var result = data
-        result.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        result.append(contentsOf: "--\(boundary)--\r\n".utf8)
         return result
     }
 
     private func append(_ string: String) {
-        data.append(string.data(using: .utf8)!)
+        data.append(contentsOf: string.utf8)
     }
 }

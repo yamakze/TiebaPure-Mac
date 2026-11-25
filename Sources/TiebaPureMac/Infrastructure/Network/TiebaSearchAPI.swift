@@ -6,8 +6,7 @@ extension TiebaAPI {
         page: Int,
         sortType: Int = 5,
         filterType: Int = 2,
-        forumName: String? = nil,
-        pageSize: Int = 30
+        forumName: String? = nil
     ) async throws -> SearchResultsPage {
         _ = try TiebaRequestValuePolicy.signedPage(page)
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -26,7 +25,7 @@ extension TiebaAPI {
         if let forumName, forumName.isEmpty == false {
             let encodedForumName = forumName.tiebaRefererQueryEscaped
             queryItems.append(contentsOf: [
-                .init(name: "rn", value: "\(pageSize)"),
+                .init(name: "rn", value: "30"),
                 .init(name: "fname", value: forumName),
                 .init(name: "ct", value: "2"),
                 .init(name: "cv", value: "12.52.1.0")
@@ -161,8 +160,8 @@ private struct SearchUserResponseDTO: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        errorCode = Int(container.decodeStringIfPresent(forKey: .errorCode) ?? "") ?? 0
-        errorMessage = container.decodeStringIfPresent(forKey: .errorMessage) ?? ""
+        errorCode = Int(container.decodeSearchStringIfPresent(forKey: .errorCode) ?? "") ?? 0
+        errorMessage = container.decodeSearchStringIfPresent(forKey: .errorMessage) ?? ""
         data = try container.decodeIfPresent(DataDTO.self, forKey: .data) ?? DataDTO()
     }
 
@@ -219,15 +218,15 @@ private struct SearchUserResponseDTO: Decodable {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = Int64(
-                container.decodeStringIfPresent(forKey: .id)
-                    ?? container.decodeStringIfPresent(forKey: .userID)
-                    ?? container.decodeStringIfPresent(forKey: .uid)
+                container.decodeSearchStringIfPresent(forKey: .id)
+                    ?? container.decodeSearchStringIfPresent(forKey: .userID)
+                    ?? container.decodeSearchStringIfPresent(forKey: .uid)
                     ?? ""
             ) ?? 0
-            name = container.decodeStringIfPresent(forKey: .name) ?? ""
-            userNickname = container.decodeStringIfPresent(forKey: .userNickname) ?? ""
-            showNickname = container.decodeStringIfPresent(forKey: .showNickname) ?? ""
-            portrait = container.decodeStringIfPresent(forKey: .portrait) ?? ""
+            name = container.decodeSearchStringIfPresent(forKey: .name) ?? ""
+            userNickname = container.decodeSearchStringIfPresent(forKey: .userNickname) ?? ""
+            showNickname = container.decodeSearchStringIfPresent(forKey: .showNickname) ?? ""
+            portrait = container.decodeSearchStringIfPresent(forKey: .portrait) ?? ""
         }
 
         var names: [String] {
@@ -260,8 +259,8 @@ private struct SearchThreadResponseDTO: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        errorCode = Int(container.decodeStringIfPresent(forKey: .errorCode) ?? "") ?? 0
-        errorMessage = container.decodeStringIfPresent(forKey: .errorMessage) ?? ""
+        errorCode = Int(container.decodeSearchStringIfPresent(forKey: .errorCode) ?? "") ?? 0
+        errorMessage = container.decodeSearchStringIfPresent(forKey: .errorMessage) ?? ""
         data = try container.decodeIfPresent(DataDTO.self, forKey: .data) ?? DataDTO()
     }
 
@@ -280,8 +279,8 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            hasMore = Int(container.decodeStringIfPresent(forKey: .hasMore) ?? "") ?? 0
-            currentPage = Int(container.decodeStringIfPresent(forKey: .currentPage) ?? "") ?? 1
+            hasMore = Int(container.decodeSearchStringIfPresent(forKey: .hasMore) ?? "") ?? 0
+            currentPage = Int(container.decodeSearchStringIfPresent(forKey: .currentPage) ?? "") ?? 1
             postList = try container.decodeIfPresent([ThreadInfoDTO].self, forKey: .postList) ?? []
         }
     }
@@ -323,16 +322,16 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            threadID = Int64(container.decodeStringIfPresent(forKey: .tid) ?? "") ?? 0
-            postID = UInt64(container.decodeStringIfPresent(forKey: .pid) ?? "")
-            title = container.decodeStringIfPresent(forKey: .title) ?? ""
-            content = container.decodeStringIfPresent(forKey: .content) ?? ""
+            threadID = Int64(container.decodeSearchStringIfPresent(forKey: .tid) ?? "") ?? 0
+            postID = UInt64(container.decodeSearchStringIfPresent(forKey: .pid) ?? "")
+            title = container.decodeSearchStringIfPresent(forKey: .title) ?? ""
+            content = container.decodeSearchStringIfPresent(forKey: .content) ?? ""
             createdAt = container.decodeDateIfPresent(forKey: .time)
-            replyCount = Int(container.decodeStringIfPresent(forKey: .replyCount) ?? "") ?? 0
-            likeCount = Int(container.decodeStringIfPresent(forKey: .likeCount) ?? "") ?? 0
-            shareCount = Int(container.decodeStringIfPresent(forKey: .shareCount) ?? "") ?? 0
-            forumID = Int64(container.decodeStringIfPresent(forKey: .forumID) ?? "")
-            forumName = container.decodeStringIfPresent(forKey: .forumName) ?? ""
+            replyCount = Int(container.decodeSearchStringIfPresent(forKey: .replyCount) ?? "") ?? 0
+            likeCount = Int(container.decodeSearchStringIfPresent(forKey: .likeCount) ?? "") ?? 0
+            shareCount = Int(container.decodeSearchStringIfPresent(forKey: .shareCount) ?? "") ?? 0
+            forumID = Int64(container.decodeSearchStringIfPresent(forKey: .forumID) ?? "")
+            forumName = container.decodeSearchStringIfPresent(forKey: .forumName) ?? ""
             user = try container.decodeIfPresent(UserDTO.self, forKey: .user) ?? UserDTO()
             forumInfo = try container.decodeIfPresent(ForumDTO.self, forKey: .forumInfo)
             media = try container.decodeIfPresent([MediaDTO].self, forKey: .media) ?? []
@@ -380,10 +379,10 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = Int64(container.decodeStringIfPresent(forKey: .userID) ?? "") ?? 0
-            name = container.decodeStringIfPresent(forKey: .userName) ?? ""
-            displayName = container.decodeStringIfPresent(forKey: .showNickname) ?? name
-            portrait = container.decodeStringIfPresent(forKey: .portrait) ?? ""
+            id = Int64(container.decodeSearchStringIfPresent(forKey: .userID) ?? "") ?? 0
+            name = container.decodeSearchStringIfPresent(forKey: .userName) ?? ""
+            displayName = container.decodeSearchStringIfPresent(forKey: .showNickname) ?? name
+            portrait = container.decodeSearchStringIfPresent(forKey: .portrait) ?? ""
         }
 
         var summary: UserSummary {
@@ -402,8 +401,8 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            forumName = container.decodeStringIfPresent(forKey: .forumName) ?? ""
-            avatar = container.decodeStringIfPresent(forKey: .avatar) ?? ""
+            forumName = container.decodeSearchStringIfPresent(forKey: .forumName) ?? ""
+            avatar = container.decodeSearchStringIfPresent(forKey: .avatar) ?? ""
         }
     }
 
@@ -418,8 +417,8 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            title = container.decodeStringIfPresent(forKey: .title) ?? ""
-            content = container.decodeStringIfPresent(forKey: .content) ?? ""
+            title = container.decodeSearchStringIfPresent(forKey: .title) ?? ""
+            content = container.decodeSearchStringIfPresent(forKey: .content) ?? ""
         }
     }
 
@@ -434,8 +433,8 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            title = container.decodeStringIfPresent(forKey: .title) ?? ""
-            content = container.decodeStringIfPresent(forKey: .content) ?? ""
+            title = container.decodeSearchStringIfPresent(forKey: .title) ?? ""
+            content = container.decodeSearchStringIfPresent(forKey: .content) ?? ""
         }
     }
 
@@ -466,16 +465,16 @@ private struct SearchThreadResponseDTO: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            type = container.decodeStringIfPresent(forKey: .type) ?? ""
-            width = Int(container.decodeStringIfPresent(forKey: .width) ?? "") ?? 1
-            height = Int(container.decodeStringIfPresent(forKey: .height) ?? "") ?? 1
-            waterPic = TiebaURL.make(container.decodeStringIfPresent(forKey: .waterPic))
-            smallPic = TiebaURL.make(container.decodeStringIfPresent(forKey: .smallPic))
-            bigPic = TiebaURL.make(container.decodeStringIfPresent(forKey: .bigPic))
-            src = TiebaURL.make(container.decodeStringIfPresent(forKey: .src))
-            videoURL = TiebaURL.make(container.decodeStringIfPresent(forKey: .videoURL))
-            highVideoURL = TiebaURL.make(container.decodeStringIfPresent(forKey: .highVideoURL))
-            videoCoverURL = TiebaURL.make(container.decodeStringIfPresent(forKey: .videoCoverURL))
+            type = container.decodeSearchStringIfPresent(forKey: .type) ?? ""
+            width = Int(container.decodeSearchStringIfPresent(forKey: .width) ?? "") ?? 1
+            height = Int(container.decodeSearchStringIfPresent(forKey: .height) ?? "") ?? 1
+            waterPic = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .waterPic))
+            smallPic = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .smallPic))
+            bigPic = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .bigPic))
+            src = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .src))
+            videoURL = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .videoURL))
+            highVideoURL = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .highVideoURL))
+            videoCoverURL = TiebaURL.make(container.decodeSearchStringIfPresent(forKey: .videoCoverURL))
         }
 
         var contentBlock: ContentBlock? {
@@ -503,7 +502,7 @@ private struct SearchThreadResponseDTO: Decodable {
 }
 
 private extension KeyedDecodingContainer {
-    func decodeStringIfPresent(forKey key: Key) -> String? {
+    func decodeSearchStringIfPresent(forKey key: Key) -> String? {
         if let value = try? decodeIfPresent(String.self, forKey: key) {
             return value
         }
@@ -523,7 +522,7 @@ private extension KeyedDecodingContainer {
     }
 
     func decodeDateIfPresent(forKey key: Key) -> Date? {
-        guard let text = decodeStringIfPresent(forKey: key), let seconds = TimeInterval(text) else {
+        guard let text = decodeSearchStringIfPresent(forKey: key), let seconds = TimeInterval(text) else {
             return nil
         }
         return Date(timeIntervalSince1970: seconds)

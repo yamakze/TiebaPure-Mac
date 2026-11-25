@@ -10,6 +10,8 @@ enum TiebaEndpoint {
     case postingLogin
     case initNickname
     case webMyInfo
+    case replyNotifications
+    case mentionNotifications
     case followedForums
     case forumPageForm
     case personalized
@@ -49,6 +51,10 @@ enum TiebaEndpoint {
             return Self.appBase.appending(path: "/c/s/initNickname")
         case .webMyInfo:
             return Self.base.appending(path: "/mo/q/newmoindex")
+        case .replyNotifications:
+            return Self.appBase.appending(path: "/c/u/feed/replyme")
+        case .mentionNotifications:
+            return Self.appBase.appending(path: "/c/u/feed/atme")
         case .followedForums:
             return Self.appBase.appending(path: "/c/f/forum/getforumlist")
         case .forumPageForm:

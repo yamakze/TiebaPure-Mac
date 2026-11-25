@@ -52,7 +52,7 @@ private struct TiebaWebThreadSubmissionResponseDTO: Decodable {
                     && container.submissionIdentifierString(forKey: $0)?
                         .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
             }
-            message = container.submissionString(forKey: .message) ?? ""
+            message = container.decodeStringOrScalar(forKey: .message) ?? ""
         }
     }
 
@@ -112,8 +112,8 @@ private struct TiebaWebThreadSubmissionResponseDTO: Decodable {
         } else {
             legacyErrorCode = topLegacyErrorCode ?? decodedData?.legacyErrorCode
         }
-        errorMessage = container.submissionString(forKey: .errorMessage) ?? ""
-        legacyErrorMessage = container.submissionString(forKey: .legacyErrorMessage) ?? ""
+        errorMessage = container.decodeStringOrScalar(forKey: .errorMessage) ?? ""
+        legacyErrorMessage = container.decodeStringOrScalar(forKey: .legacyErrorMessage) ?? ""
         let threadID = container.submissionIdentifierString(forKey: .threadID)
         let postID = container.submissionIdentifierString(forKey: .postID)
         threadIDs = [threadID].compactMap { $0 } + (decodedData?.threadIDs ?? [])
@@ -225,13 +225,13 @@ struct TiebaWebUploadPictureResponseDTO: Decodable, Equatable {
         } else {
             errorCode = primaryCode ?? legacyCode
         }
-        errorMessage = container.submissionString(forKey: .errorMessage)
-            ?? container.submissionString(forKey: .camelErrorMessage)
-            ?? container.submissionString(forKey: .legacyErrorMessage)
-            ?? container.submissionString(forKey: .legacyCamelErrorMessage)
+        errorMessage = container.decodeStringOrScalar(forKey: .errorMessage)
+            ?? container.decodeStringOrScalar(forKey: .camelErrorMessage)
+            ?? container.decodeStringOrScalar(forKey: .legacyErrorMessage)
+            ?? container.decodeStringOrScalar(forKey: .legacyCamelErrorMessage)
             ?? ""
-        imageInfo = container.submissionString(forKey: .imageInfo)
-            ?? container.submissionString(forKey: .camelImageInfo)
+        imageInfo = container.decodeStringOrScalar(forKey: .imageInfo)
+            ?? container.decodeStringOrScalar(forKey: .camelImageInfo)
             ?? ""
     }
 
@@ -297,10 +297,10 @@ struct TiebaWebReplySubmissionResponseDTO: Decodable {
                 container.contains($0) && container.submissionInt(forKey: $0) == nil
             }
             messages = [
-                container.submissionString(forKey: .errorMessage),
-                container.submissionString(forKey: .legacyErrorMessage),
-                container.submissionString(forKey: .error),
-                container.submissionString(forKey: .message)
+                container.decodeStringOrScalar(forKey: .errorMessage),
+                container.decodeStringOrScalar(forKey: .legacyErrorMessage),
+                container.decodeStringOrScalar(forKey: .error),
+                container.decodeStringOrScalar(forKey: .message)
             ].compactMap { $0 }
             let threadID = container.submissionIdentifierString(forKey: .threadID)
             let postID = container.submissionIdentifierString(forKey: .postID)
@@ -365,10 +365,10 @@ struct TiebaWebReplySubmissionResponseDTO: Decodable {
             container.contains($0) && container.submissionInt(forKey: $0) == nil
         } || (data?.hasUnparseableCode ?? false)
         messages = [
-            container.submissionString(forKey: .errorMessage),
-            container.submissionString(forKey: .legacyErrorMessage),
-            container.submissionString(forKey: .error),
-            container.submissionString(forKey: .message)
+            container.decodeStringOrScalar(forKey: .errorMessage),
+            container.decodeStringOrScalar(forKey: .legacyErrorMessage),
+            container.decodeStringOrScalar(forKey: .error),
+            container.decodeStringOrScalar(forKey: .message)
         ].compactMap { $0 } + (data?.messages ?? [])
         let threadID = container.submissionIdentifierString(forKey: .threadID)
         let postID = container.submissionIdentifierString(forKey: .postID)
@@ -1140,24 +1140,6 @@ private extension KeyedDecodingContainer {
         return nil
     }
 
-    func submissionString(forKey key: Key) -> String? {
-        if let value = try? decodeIfPresent(String.self, forKey: key) {
-            return value
-        }
-        if let value = try? decodeIfPresent(Int64.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(UInt64.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Double.self, forKey: key) {
-            return String(value)
-        }
-        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
-            return value ? "1" : "0"
-        }
-        return nil
-    }
 
     func submissionInt(forKey key: Key) -> Int? {
         if let value = try? decodeIfPresent(String.self, forKey: key) {
