@@ -1,5 +1,4 @@
 import Foundation
-import Combine
 
 enum TiebaEmoticon {
     private static let namesByImageName: [String: String] = [
@@ -119,11 +118,6 @@ enum TiebaEmoticon {
         return imageNamesByName[normalized]
     }
 
-    static func imageURL(for code: String) -> URL? {
-        guard let imageName = imageName(for: code) else { return nil }
-        return TiebaEmoticonCache.shared.fileURLIfPresent(for: imageName)
-    }
-
     static func remoteImageURL(imageName: String) -> URL? {
         TiebaEmoticonURLPolicy.imageURL(for: imageName)
     }
@@ -226,76 +220,31 @@ enum TiebaEmoticon {
     }
 }
 
-/// Publishes the exact artwork names that became available. Updates arriving
-/// in the same run-loop turn are coalesced so a reply containing several newly
-/// downloaded emoticons rebuilds once instead of once per image.
-@MainActor
-final class TiebaEmoticonArtwork {
-    static let shared = TiebaEmoticonArtwork()
-    nonisolated static let didChangeNotification = Notification.Name("TiebaEmoticonArtworkDidChange")
+enum TiebaEmoticonURLPolicy {
+    static let host = "tb2.bdstatic.com"
+    static let maximumNumericID = 999
 
-    private var pendingImageNames: Set<String> = []
-    private var flushTask: Task<Void, Never>?
+    static func imageURL(for imageName: String) -> URL? {
+        guard isValidImageName(imageName) else { return nil }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = "/tb/editor/images/client/\(imageName).png"
+        return components.url
+    }
 
-    private init() {}
-
-    func didFetch(_ imageName: String) {
-        guard imageName.isEmpty == false else { return }
-        pendingImageNames.insert(imageName)
-        guard flushTask == nil else { return }
-        flushTask = Task { @MainActor [weak self] in
-            await Task.yield()
-            self?.flushPendingChanges()
+    static func isValidImageName(_ value: String) -> Bool {
+        guard value.hasPrefix("image_emoticon") else { return false }
+        let suffix = value.dropFirst("image_emoticon".count)
+        guard suffix.isEmpty == false,
+              suffix.count <= String(maximumNumericID).count,
+              suffix.first != "0",
+              suffix.unicodeScalars.allSatisfy({ scalar in
+                  scalar.value >= 48 && scalar.value <= 57
+              }),
+              let numericID = Int(suffix) else {
+            return false
         }
-    }
-
-    nonisolated static func imageNames(from notification: Notification) -> Set<String> {
-        Set(notification.userInfo?["imageNames"] as? [String] ?? [])
-    }
-
-    private func flushPendingChanges() {
-        let imageNames = pendingImageNames.sorted()
-        pendingImageNames.removeAll(keepingCapacity: true)
-        flushTask = nil
-        guard imageNames.isEmpty == false else { return }
-        NotificationCenter.default.post(
-            name: Self.didChangeNotification,
-            object: self,
-            userInfo: ["imageNames": imageNames]
-        )
-    }
-}
-
-final class TiebaEmoticonArtworkObserver: ObservableObject, @unchecked Sendable {
-    @Published private(set) var revision = 0
-
-    private let imageNames: Set<String>
-    private var notificationToken: NSObjectProtocol?
-
-    init(imageNames: Set<String>) {
-        self.imageNames = imageNames
-        notificationToken = NotificationCenter.default.addObserver(
-            forName: TiebaEmoticonArtwork.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let self,
-                  self.imageNames.isDisjoint(
-                    with: TiebaEmoticonArtwork.imageNames(from: notification)
-                  ) == false else {
-                return
-            }
-            self.revision &+= 1
-        }
-    }
-
-    convenience init(code: String) {
-        self.init(imageNames: Set([TiebaEmoticon.imageName(for: code) ?? code]))
-    }
-
-    deinit {
-        if let notificationToken {
-            NotificationCenter.default.removeObserver(notificationToken)
-        }
+        return (1...maximumNumericID).contains(numericID)
     }
 }

@@ -2,8 +2,6 @@ import Foundation
 import ImageIO
 
 enum TiebaImageRequestPolicy {
-    static let maximumRetryCount = 2
-
     static func request(for url: URL) -> URLRequest {
         var request = URLRequest(
             url: url,
@@ -15,24 +13,6 @@ enum TiebaImageRequestPolicy {
         return request
     }
 
-    static func shouldRetry(statusCode: Int, attempt: Int) -> Bool {
-        guard attempt < maximumRetryCount else { return false }
-        return statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
-    }
-
-    static func shouldRetry(error: Error, attempt: Int) -> Bool {
-        guard attempt < maximumRetryCount else { return false }
-        let code = (error as? URLError)?.code
-        return code == .timedOut
-            || code == .networkConnectionLost
-            || code == .notConnectedToInternet
-            || code == .cannotConnectToHost
-            || code == .cannotFindHost
-    }
-
-    static func retryDelayNanoseconds(after attempt: Int) -> UInt64 {
-        UInt64(250_000_000 * max(attempt + 1, 1))
-    }
 }
 
 enum TiebaImageSourcePolicy {

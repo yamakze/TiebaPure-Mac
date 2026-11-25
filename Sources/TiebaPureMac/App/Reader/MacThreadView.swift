@@ -252,7 +252,7 @@ struct MacContentBlocks: View {
                     if let url = image.thumbnailURL ?? image.originalURL {
                         let hasDimensions = image.width > 0 && image.height > 0
                         // Missing dimensions use a 4:3 preview so decoding cannot move the following content.
-                        let ratio = hasDimensions ? CGFloat(image.width) / CGFloat(image.height) : 4.0 / 3
+                        let ratio = hasDimensions ? CGFloat(image.aspectRatio) : 4.0 / 3
                         let width = hasDimensions ? CGFloat(image.width) : 480
                         RoundedRectangle(cornerRadius: 6)
                             .fill(.quaternary)

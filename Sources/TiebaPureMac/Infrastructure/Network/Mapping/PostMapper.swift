@@ -131,7 +131,10 @@ enum PostMapper {
         )
     }
 
-    static func post(from proto: Tieba_Post, usersByID: [Int64: Tieba_User], threadID: Int64) -> Post {
+    static func post(
+        from proto: Tieba_Post, usersByID: [Int64: Tieba_User], threadID: Int64,
+        blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist
+    ) -> Post {
         let author = UserMapper.fromUser(
             proto.hasAuthor ? proto.author : Tieba_User(),
             fallbackID: proto.authorID,
@@ -150,7 +153,7 @@ enum PostMapper {
             likeCount: likeCount(from: proto),
             isLiked: proto.agree.hasAgree_p != 0,
             previewSubposts: proto.subPostList.subPostList
-                .filter(TiebaContentFilter.shouldKeep(subpost:))
+                .filter { TiebaContentFilter.shouldKeep(subpost: $0, blocklist: blocklist) }
                 .map { subpost($0, usersByID: usersByID) }
         )
     }
@@ -174,10 +177,6 @@ enum PostMapper {
         )
     }
 
-    static func subpost(from proto: Tieba_SubPostList) -> Subpost {
-        subpost(proto)
-    }
-
     static func threadPage(from response: Tieba_PbPage_PbPageResponse) -> ThreadPage {
         let data = response.data
         var usersByID: [Int64: Tieba_User] = [:]
@@ -193,13 +192,14 @@ enum PostMapper {
                 $0.floor == 1
                     && $0.id != 0
             }
-        let posts = data.postList
-            .filter(TiebaContentFilter.shouldKeep(post:))
-            .map { post(from: $0, usersByID: usersByID, threadID: data.thread.id) }
+        let blocklist = TiebaContentFilter.blocklist
+        let posts = data.postList.lazy
+            .filter { TiebaContentFilter.shouldKeep(post: $0, blocklist: blocklist) }
+            .map { post(from: $0, usersByID: usersByID, threadID: thread.id, blocklist: blocklist) }
             .map { enrichIPIfNeeded($0, thread: thread) }
         let mainPost = rawMainPost.map {
             enrichIPIfNeeded(
-                post(from: $0, usersByID: usersByID, threadID: data.thread.id),
+                post(from: $0, usersByID: usersByID, threadID: thread.id, blocklist: blocklist),
                 thread: thread
             )
         }
@@ -208,7 +208,7 @@ enum PostMapper {
             thread: thread,
             forum: forum,
             mainPost: mainPost,
-            posts: posts,
+            posts: Array(posts),
             currentPage: Int(data.page.currentPage),
             totalPage: Int(data.page.totalPage),
             hasMore: data.page.currentPage < data.page.totalPage || data.page.hasMore_p != 0,

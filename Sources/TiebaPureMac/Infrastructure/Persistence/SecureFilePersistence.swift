@@ -318,7 +318,9 @@ final class SecureCodableFile<Payload: Codable & Sendable>: @unchecked Sendable 
     }
 
     private func encode(_ payload: Payload) throws -> Data {
-        let payloadData = try Self.encoder().encode(payload)
+        let encoder = Self.encoder()
+        // Existing envelopes verify a checksum of the standalone canonical payload.
+        let payloadData = try encoder.encode(payload)
         guard payloadData.count <= maximumByteCount else {
             throw SecureFilePersistenceError.payloadTooLarge
         }
@@ -327,7 +329,7 @@ final class SecureCodableFile<Payload: Codable & Sendable>: @unchecked Sendable 
             payload: payload,
             checksum: SecurePersistenceDigest.sha256(payloadData)
         )
-        let data = try Self.encoder().encode(envelope)
+        let data = try encoder.encode(envelope)
         guard data.count <= maximumByteCount else {
             throw SecureFilePersistenceError.payloadTooLarge
         }

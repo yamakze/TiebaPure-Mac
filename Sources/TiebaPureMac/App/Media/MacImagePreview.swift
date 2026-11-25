@@ -38,7 +38,6 @@ struct MacImagePreview: View {
                     Button("上一张", systemImage: "chevron.left") { select(index - 1) }
                         .keyboardShortcut(.leftArrow, modifiers: [])
                         .disabled(index == 0)
-                        .accessibilityIdentifier("image-preview-previous")
                     Text("\(index + 1) / \(selection.images.count)")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -46,7 +45,6 @@ struct MacImagePreview: View {
                     Button("下一张", systemImage: "chevron.right") { select(index + 1) }
                         .keyboardShortcut(.rightArrow, modifiers: [])
                         .disabled(index + 1 == selection.images.count)
-                        .accessibilityIdentifier("image-preview-next")
                     Divider().frame(height: 16)
                 }
                 Button("缩小", systemImage: "minus.magnifyingglass") { zoom = max(1, zoom / 1.5) }

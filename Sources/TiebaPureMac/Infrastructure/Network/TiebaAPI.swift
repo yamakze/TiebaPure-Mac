@@ -3,7 +3,6 @@ import Foundation
 struct TiebaAPI {
     var client: TiebaHTTPClient
     var requestBuilder = TiebaRequestBuilder.live()
-    var postingBootstrap: any TiebaPostingBootstrapping = TiebaPostingBootstrap.live()
 
     func validateLogin(cookies: BaiduCookies) async throws -> Account {
         guard BaiduCredentialPolicy.isValid(cookies) else {
@@ -356,8 +355,9 @@ extension TiebaAPI {
         guard response.hasData else { throw TiebaAPIError.emptyResponse }
 
         let rawThreads = response.data.threadList
+        let blocklist = TiebaContentFilter.blocklist
         let threads = rawThreads
-            .filter(TiebaContentFilter.shouldMap(thread:))
+            .filter { TiebaContentFilter.shouldKeep(thread: $0, blocklist: blocklist) }
             .map { ThreadMapper.fromThreadInfo($0, usersByID: [:]) }
         return ThreadListPage(threads: threads, hasMore: !rawThreads.isEmpty)
     }
@@ -460,8 +460,9 @@ extension TiebaAPI {
         }
 
         let rawThreads = response.data.threadList
+        let blocklist = TiebaContentFilter.blocklist
         let threads = rawThreads
-            .filter(TiebaContentFilter.shouldMap(thread:))
+            .filter { TiebaContentFilter.shouldKeep(thread: $0, blocklist: blocklist) }
             .map { ThreadMapper.fromThreadInfo($0, usersByID: usersByID) }
         return ThreadListPage(threads: threads, hasMore: !rawThreads.isEmpty)
     }
@@ -507,10 +508,12 @@ extension TiebaAPI {
         try validateResponseCode(response.errorCode, message: response.errorMessage)
 
         let usersByID = response.usersByID
-        let threads = response.threadList
+        let blocklist = TiebaContentFilter.blocklist
+        let threads = response.threadList.lazy
             .filter(\.shouldKeep)
             .map { $0.threadSummary(usersByID: usersByID, forumName: forumName) }
-        return ThreadListPage(threads: threads, hasMore: !response.threadList.isEmpty)
+            .filter { TiebaContentFilter.shouldKeep(thread: $0, blocklist: blocklist) }
+        return ThreadListPage(threads: Array(threads), hasMore: !response.threadList.isEmpty)
     }
 }
 
@@ -1062,14 +1065,6 @@ enum TiebaRequestValuePolicy {
             throw TiebaRequestValidationError.invalidIdentifier(identifier)
         }
         return value
-    }
-}
-
-enum TiebaPaginationPolicy {
-    static func nextPage(requestedPage: Int, responseCurrentPage: Int) -> Int? {
-        let currentPage = max(requestedPage, responseCurrentPage)
-        guard currentPage > 0, currentPage < Int(Int32.max) else { return nil }
-        return currentPage + 1
     }
 }
 

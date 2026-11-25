@@ -673,7 +673,7 @@ final class SavedThreadMediaStore: @unchecked Sendable {
         }
 
         func appendUser(_ user: UserSummary) throws {
-            try appendImage([TiebaURL.avatar(user.portrait)], kind: .avatar)
+            try appendImage([user.portraitURL], kind: .avatar)
         }
 
         func appendBlocks(_ blocks: [ContentBlock]) throws {
@@ -790,7 +790,7 @@ final class SavedThreadMediaStore: @unchecked Sendable {
 
     private func resolvedUser(_ user: UserSummary, using resolved: [String: URL]) -> UserSummary {
         var result = user
-        result.portrait = TiebaURL.avatar(user.portrait)
+        result.portrait = user.portraitURL
             .flatMap { resolved[$0.absoluteString] }?
             .absoluteString ?? ""
         return result
@@ -936,5 +936,16 @@ final class SavedThreadMediaStore: @unchecked Sendable {
             attributes[.protectionKey] = FileProtectionType.complete
         }
         return attributes
+    }
+}
+
+
+extension UserSummary {
+    var portraitURL: URL? {
+        if let localURL = URL(string: portrait), localURL.isFileURL,
+           SavedThreadMediaAuthorization.shared.allows(localURL) {
+            return localURL
+        }
+        return TiebaURL.avatar(portrait)
     }
 }

@@ -1,85 +1,5 @@
 import Foundation
 
-enum TiebaForumName {
-    static func normalized(_ value: String) -> String {
-        var normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalized.hasSuffix("吧") {
-            normalized.removeLast()
-            normalized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return normalized.lowercased()
-    }
-}
-
-// Feed and thread mapping consult the blocklist from async request code, so
-// the active rules are a Sendable value swapped behind a lock instead of a
-// read of the main-actor BlocklistStore. Keywords and forum names must be
-// stored in canonical form, user names folded via TiebaUserName.normalized;
-// BlocklistSnapshot(entries:) produces that shape.
-struct BlocklistSnapshot: Equatable, Sendable {
-    var keywords: Set<String>
-    var userIDs: Set<Int64>
-    var userNames: Set<String>
-    var forumIDs: Set<Int64>
-    var forumNames: Set<String>
-
-    init(
-        keywords: Set<String> = [],
-        userIDs: Set<Int64> = [],
-        userNames: Set<String> = [],
-        forumIDs: Set<Int64> = [],
-        forumNames: Set<String> = []
-    ) {
-        self.keywords = keywords
-        self.userIDs = userIDs
-        self.userNames = userNames
-        self.forumIDs = Set(forumIDs.filter { $0 > 0 })
-        self.forumNames = Set(
-            forumNames
-                .map(TiebaForumName.normalized)
-                .filter { $0.isEmpty == false }
-        )
-    }
-
-    var isEmpty: Bool {
-        keywords.isEmpty
-            && userIDs.isEmpty
-            && userNames.isEmpty
-            && forumIDs.isEmpty
-            && forumNames.isEmpty
-    }
-
-    func containsKeyword(in text: String) -> Bool {
-        guard keywords.isEmpty == false, text.isEmpty == false else { return false }
-        let lowercased = text.lowercased()
-        return keywords.contains { lowercased.contains($0) }
-    }
-
-    func blocksUser(id: Int64, names: [String]) -> Bool {
-        if id > 0, userIDs.contains(id) { return true }
-        guard userNames.isEmpty == false else { return false }
-        return names.contains { name in
-            guard name.isEmpty == false else { return false }
-            return userNames.contains(TiebaUserName.normalized(name))
-        }
-    }
-
-    func blocksForum(named name: String) -> Bool {
-        blocksForum(id: nil, names: [name])
-    }
-
-    func blocksForum(id: Int64?, names: [String]) -> Bool {
-        if let id, id > 0, forumIDs.contains(id) {
-            return true
-        }
-        guard forumNames.isEmpty == false else { return false }
-        return names.contains { name in
-            let normalized = TiebaForumName.normalized(name)
-            return normalized.isEmpty == false && forumNames.contains(normalized)
-        }
-    }
-}
-
 enum TiebaContentFilter {
     // Reads happen off the main actor during mapping; the store publishes on
     // the main actor. The lock keeps both sides safe, and the first read
@@ -113,9 +33,8 @@ enum TiebaContentFilter {
         return true
     }
 
-    static func shouldKeep(thread: Tieba_ThreadInfo) -> Bool {
+    static func shouldKeep(thread: Tieba_ThreadInfo, blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist) -> Bool {
         guard shouldMap(thread: thread) else { return false }
-        let blocklist = Self.blocklist
         guard blocklist.isEmpty == false else { return true }
         if blocklist.blocksUser(
             id: thread.author.id > 0 ? thread.author.id : thread.authorID,
@@ -138,8 +57,7 @@ enum TiebaContentFilter {
         return true
     }
 
-    static func shouldKeep(thread: ThreadSummary) -> Bool {
-        let blocklist = Self.blocklist
+    static func shouldKeep(thread: ThreadSummary, blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist) -> Bool {
         guard blocklist.isEmpty == false else { return true }
         if blocklist.blocksUser(
             id: thread.author.id,
@@ -155,8 +73,8 @@ enum TiebaContentFilter {
         return blocklist.containsKeyword(in: thread.textPreview) == false
     }
 
-    static func shouldKeep(searchResult: SearchResult) -> Bool {
-        shouldKeep(thread: searchResult.threadSummary)
+    static func shouldKeep(searchResult: SearchResult, blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist) -> Bool {
+        shouldKeep(thread: searchResult.threadSummary, blocklist: blocklist)
     }
 
     /// Applies the same local mute rules to reply/@ feeds without changing
@@ -206,9 +124,8 @@ enum TiebaContentFilter {
             || post.subPostList.subPostList.isEmpty == false
     }
 
-    static func shouldKeep(post: Tieba_Post) -> Bool {
+    static func shouldKeep(post: Tieba_Post, blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist) -> Bool {
         guard shouldMap(post: post) else { return false }
-        let blocklist = Self.blocklist
         if blocklist.isEmpty == false {
             if blocklist.blocksUser(
                 id: post.author.id > 0 ? post.author.id : post.authorID,
@@ -237,8 +154,7 @@ enum TiebaContentFilter {
         isMainPost || shouldKeep(post: post)
     }
 
-    static func shouldKeep(subpost: Tieba_SubPostList) -> Bool {
-        let blocklist = Self.blocklist
+    static func shouldKeep(subpost: Tieba_SubPostList, blocklist: BlocklistSnapshot = TiebaContentFilter.blocklist) -> Bool {
         guard blocklist.isEmpty == false else { return true }
         if blocklist.blocksUser(
             id: subpost.author.id > 0 ? subpost.author.id : subpost.authorID,

@@ -1,16 +1,6 @@
 import Foundation
 import CoreFoundation
 
-struct TiebaAppUploadedImage: Equatable, Sendable {
-    let picID: String
-    let pixelWidth: Int
-    let pixelHeight: Int
-
-    var contentTag: String {
-        "#(pic,\(picID),\(pixelWidth),\(pixelHeight))"
-    }
-}
-
 private struct TiebaWebThreadSubmissionResponseDTO: Decodable {
     private struct DataDTO: Decodable {
         let result: Int?
@@ -446,140 +436,10 @@ struct TiebaWebReplySubmissionResponseDTO: Decodable {
 }
 
 enum TiebaContentSubmissionRequestFactory {
-    static let clientVersion = "12.35.1.0"
     static let postingLoginClientVersion = "22.5.1.0"
 
     private static let webUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) "
         + "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
-
-    private static var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
-    }
-
-    static func common(
-        account: Account,
-        tbs: String,
-        bootstrap: TiebaPostingBootstrapResult,
-        requestBuilder: TiebaRequestBuilder,
-        now: Date = Date()
-    ) -> Tieba_CommonRequest {
-        let timestamp = Int64(now.timeIntervalSince1970 * 1_000)
-        let firstRunTimestamp = max(1, timestamp - 30 * 86_400)
-        let dateComponents = Calendar(identifier: .gregorian).dateComponents(
-            [.year, .month, .day],
-            from: now
-        )
-
-        var common = Tieba_CommonRequest()
-        common.clientType = 2
-        common.clientVersion = clientVersion
-        common.clientID = bootstrap.clientID
-        common.phoneImei = "000000000000000"
-        common.from = "1008621x"
-        common.cuid = bootstrap.identity.cuidGalaxy2
-        common.timestamp = timestamp
-        common.model = "SM-G988N"
-        common.bduss = account.bduss
-        common.tbs = tbs
-        common.netType = 1
-        common.pversion = "1.0.3"
-        common.osVersion = "9"
-        common.brand = "samsung"
-        common.legoLibVersion = "3.0.0"
-        common.applist = ""
-        common.stoken = account.stoken
-        common.zID = bootstrap.zID
-        common.cuidGalaxy2 = bootstrap.identity.cuidGalaxy2
-        common.c3Aid = bootstrap.identity.c3AID
-        common.sampleID = bootstrap.sampleID
-        common.scrW = 720
-        common.scrH = 1_280
-        common.scrDip = 1.5
-        common.sdkVer = "2.34.0"
-        common.frameworkVer = "3340042"
-        common.nawsGameVer = "1038000"
-        common.activeTimestamp = firstRunTimestamp
-        common.firstInstallTime = firstRunTimestamp
-        common.lastUpdateTime = firstRunTimestamp
-        common.eventDay = [dateComponents.year, dateComponents.month, dateComponents.day]
-            .compactMap { $0.map(String.init) }
-            .joined()
-        common.androidID = bootstrap.identity.androidID
-        common.cmode = 1
-        common.startScheme = ""
-        common.startType = 1
-        common.idfv = "0"
-        common.extra = ""
-        common.userAgent = "tieba/\(clientVersion) skin/default TiebaPure/\(appVersion)"
-        common.personalizedRecSwitch = 1
-        common.deviceScore = "0.4"
-        return common
-    }
-
-    static func addPost(
-        account: Account,
-        tbs: String,
-        request: ContentSubmissionRequest,
-        uploadedImages: [TiebaAppUploadedImage],
-        bootstrap: TiebaPostingBootstrapResult,
-        requestBuilder: TiebaRequestBuilder,
-        now: Date = Date()
-    ) throws -> Tieba_AddPostRequest {
-        guard let threadID = request.target.threadID, threadID > 0 else {
-            throw ContentSubmissionValidationError.invalidThread
-        }
-
-        var data = Tieba_AddPostRequest.DataMessage()
-        data.common = common(
-            account: account,
-            tbs: tbs,
-            bootstrap: bootstrap,
-            requestBuilder: requestBuilder,
-            now: now
-        )
-        data.anonymous = "1"
-        data.canNoForum = "0"
-        data.isFeedback = "0"
-        data.takephotoNum = String(uploadedImages.count)
-        data.entranceType = "0"
-        data.vcodeTag = "12"
-        data.newVcode = "1"
-        let body = request.target.kind == .subpostReply
-            ? subpostReplyBody(request.body, target: request.target)
-            : request.body
-        data.content = content(body: body, uploadedImages: uploadedImages)
-        data.fid = String(request.target.forumID)
-        data.vFid = ""
-        data.vFname = ""
-        data.kw = request.target.forumName
-        data.isBarrage = "0"
-        data.fromFourmID = String(request.target.forumID)
-        data.tid = String(threadID)
-        data.isAd = "0"
-        data.nameShow = account.displayName.isEmpty ? account.name : account.displayName
-        data.isPictxt = uploadedImages.isEmpty ? "0" : "1"
-
-        switch request.target.kind {
-        case .threadReply:
-            data.barrageTime = "0"
-            data.postFrom = "3"
-        case .postReply:
-            try applyFloorReplyTarget(request.target, to: &data)
-            data.postFrom = "0"
-        case .subpostReply:
-            try applyFloorReplyTarget(request.target, to: &data)
-            guard let subpostID = request.target.subpostID, subpostID > 0 else {
-                throw ContentSubmissionValidationError.invalidThread
-            }
-            data.subPostID = String(subpostID)
-        case .newThread:
-            throw ContentSubmissionError.unsupported(message: "新主题必须使用发帖协议。")
-        }
-
-        var protobuf = Tieba_AddPostRequest()
-        protobuf.data = data
-        return protobuf
-    }
 
     static func webThreadFields(
         account: Account,
@@ -725,30 +585,6 @@ enum TiebaContentSubmissionRequestFactory {
             // Keep BAIDUID out of write requests to minimize disclosure.
             "Cookie": "BDUSS=\(account.bduss); STOKEN=\(account.stoken)"
         ]
-    }
-
-    private static func applyFloorReplyTarget(
-        _ target: ContentSubmissionTarget,
-        to data: inout Tieba_AddPostRequest.DataMessage
-    ) throws {
-        guard let parentPostID = target.parentPostID, parentPostID > 0 else {
-            throw ContentSubmissionValidationError.invalidThread
-        }
-        data.quoteID = String(parentPostID)
-        data.repostid = String(parentPostID)
-        if let replyUserID = target.replyUserID, replyUserID > 0 {
-            data.replyUid = String(replyUserID)
-        }
-    }
-
-    private static func content(
-        body: String,
-        uploadedImages: [TiebaAppUploadedImage]
-    ) -> String {
-        let imageTags = uploadedImages.map(\.contentTag)
-        if body.isEmpty { return imageTags.joined(separator: "\n") }
-        if imageTags.isEmpty { return body }
-        return ([body] + imageTags).joined(separator: "\n")
     }
 
     private static func subpostReplyBody(

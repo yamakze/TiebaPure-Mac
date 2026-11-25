@@ -122,10 +122,6 @@ struct AuthSession {
         }
     }
 
-    static func shouldAttemptCookieValidation(on url: URL) -> Bool {
-        isSuccessURL(url)
-    }
-
     /// The official Tieba app claims the HTTPS completion address as a
     /// Universal Link. Capture it as an authentication signal, but never let
     /// WebKit render or hand it to the operating system.

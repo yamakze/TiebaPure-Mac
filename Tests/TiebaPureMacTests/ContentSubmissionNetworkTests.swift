@@ -527,7 +527,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
         XCTAssertEqual(SubmissionURLProtocol.count(path: "/mo/q/apubpost", id: harness.id), 0)
     }
 
-    func testAllReplyTargetsUseExactWebFormAndNeverBootstrapOrFallback() async throws {
+    func testAllReplyTargetsUseExactWebFormWithoutLegacyFallback() async throws {
         let cases: [(ContentSubmissionKind, Set<String>, String)] = [
             (
                 .threadReply,
@@ -548,8 +548,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
 
         for (kind, expectedKeys, expectedBody) in cases {
             let response = Data(#"{"no":0,"error":"","data":{"pid":9001,"tid":1001}}"#.utf8)
-            let bootstrap = CountingSubmissionPostingBootstrap(result: Self.bootstrap)
-            let harness = makeAPI(mode: .finalResponse(response), postingBootstrap: bootstrap)
+            let harness = makeAPI(mode: .finalResponse(response))
             let request = Self.replyRequest(kind: kind)
             do {
                 let receipt = try await harness.api.submitContent(
@@ -561,8 +560,6 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
                     "/c/s/login",
                     "/mo/q/apubpost"
                 ])
-                let bootstrapCalls = await bootstrap.callCount()
-                XCTAssertEqual(bootstrapCalls, 0)
 
                 let records = SubmissionURLProtocol.records(id: harness.id)
                 let loginRequest = try XCTUnwrap(records.first)
@@ -642,8 +639,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
 
     func testNewThreadUsesSingleHTTPSWebFormWithMinimalCookies() async throws {
         let response = Data(#"{"result":"1","tid":"7001","pid":"7002"}"#.utf8)
-        let bootstrap = CountingSubmissionPostingBootstrap(result: Self.bootstrap)
-        let harness = makeAPI(mode: .finalResponse(response), postingBootstrap: bootstrap)
+        let harness = makeAPI(mode: .finalResponse(response))
         defer { SubmissionURLProtocol.remove(id: harness.id) }
         let request = Self.newThreadRequest(
             title: "  新主题\n副标题  ",
@@ -659,8 +655,6 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
             "/c/s/login",
             "/f/commit/thread/add"
         ])
-        let bootstrapCalls = await bootstrap.callCount()
-        XCTAssertEqual(bootstrapCalls, 0)
         XCTAssertEqual(SubmissionURLProtocol.count(path: "/f/commit/thread/add", id: harness.id), 1)
         XCTAssertEqual(SubmissionURLProtocol.count(path: "/c/c/thread/add", id: harness.id), 0)
 
@@ -1158,8 +1152,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
 
     func testWebImageUploadFeedsExactImageInfoIntoReplyWithoutLegacyUpload() async throws {
         let response = Data(#"{"no":0,"data":{"tid":1001,"pid":9001}}"#.utf8)
-        let bootstrap = CountingSubmissionPostingBootstrap(result: Self.bootstrap)
-        let harness = makeAPI(mode: .finalResponse(response), postingBootstrap: bootstrap)
+        let harness = makeAPI(mode: .finalResponse(response))
         defer { SubmissionURLProtocol.remove(id: harness.id) }
         let imageData = try XCTUnwrap(Data(base64Encoded: Self.onePixelPNGBase64))
         let request = ContentSubmissionRequest(
@@ -1183,8 +1176,6 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
             "/c/s/login",
             "/mo/q/apubpost"
         ])
-        let bootstrapCalls = await bootstrap.callCount()
-        XCTAssertEqual(bootstrapCalls, 0)
 
         let upload = try XCTUnwrap(records.first)
         XCTAssertEqual(upload.scheme, "https")
@@ -1266,8 +1257,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
 
     func testMalformedFloorTargetsAreRejectedBeforeBootstrapOrNetwork() async throws {
         let response = Data(#"{"no":0,"data":{"tid":1001,"pid":9001}}"#.utf8)
-        let bootstrap = CountingSubmissionPostingBootstrap(result: Self.bootstrap)
-        let harness = makeAPI(mode: .finalResponse(response), postingBootstrap: bootstrap)
+        let harness = makeAPI(mode: .finalResponse(response))
         defer { SubmissionURLProtocol.remove(id: harness.id) }
         let malformedTargets = [
             ContentSubmissionTarget(
@@ -1315,29 +1305,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
             }
         }
 
-        let bootstrapCalls = await bootstrap.callCount()
-        XCTAssertEqual(bootstrapCalls, 0)
         XCTAssertTrue(SubmissionURLProtocol.records(id: harness.id).isEmpty)
-    }
-
-    func testReplyDoesNotConsultPostingBootstrapEvenWhenItWouldFail() async throws {
-        let error = TiebaPostingBootstrapError.server(code: 340006, message: "sync rejected")
-        let harness = makeAPI(
-            mode: .finalResponse(Data(#"{"no":0,"data":{"tid":1001,"pid":9001}}"#.utf8)),
-            postingBootstrap: FailingSubmissionPostingBootstrap(error: error)
-        )
-        defer { SubmissionURLProtocol.remove(id: harness.id) }
-
-        let receipt = try await harness.api.submitContent(
-            account: Self.account,
-            request: Self.textReply
-        )
-
-        XCTAssertEqual(receipt, ContentSubmissionReceipt(threadID: 1001, postID: 9001))
-        XCTAssertEqual(SubmissionURLProtocol.paths(id: harness.id), [
-            "/c/s/login",
-            "/mo/q/apubpost"
-        ])
     }
 
     func testStrictTBSRefreshFailureNeverSendsFinalMutation() async {
@@ -1395,16 +1363,6 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
     }
 
     private func makeAPI(mode: SubmissionStubMode) -> (api: TiebaAPI, id: String) {
-        makeAPI(
-            mode: mode,
-            postingBootstrap: SubmissionPostingBootstrapStub(result: Self.bootstrap)
-        )
-    }
-
-    private func makeAPI(
-        mode: SubmissionStubMode,
-        postingBootstrap: any TiebaPostingBootstrapping
-    ) -> (api: TiebaAPI, id: String) {
         let id = UUID().uuidString
         SubmissionURLProtocol.register(mode: mode, id: id)
         let configuration = URLSessionConfiguration.ephemeral
@@ -1414,8 +1372,7 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
         return (
             TiebaAPI(
                 client: TiebaHTTPClient(session: session),
-                requestBuilder: Self.requestBuilder,
-                postingBootstrap: postingBootstrap
+                requestBuilder: Self.requestBuilder
             ),
             id
         )
@@ -1596,53 +1553,9 @@ final class ContentSubmissionNetworkIntegrationTests: XCTestCase {
         clientID: "submission-network-test"
     )
 
-    private static let bootstrap = TiebaPostingBootstrapResult(
-        identity: TiebaPostingIdentity(
-            androidID: "0123456789abcdef",
-            uuid: "00112233-4455-4677-8899-aabbccddeeff",
-            cuidGalaxy2: "submission-network-test",
-            c3AID: "fixture-c3-aid"
-        ),
-        clientID: "fixture-client-id",
-        sampleID: "fixture-sample-id",
-        zID: "fixture-z-id"
-    )
-
     private static let onePixelPNGBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
     private static let fixtureImageInfo = "fixture-image-info"
-}
-
-private struct SubmissionPostingBootstrapStub: TiebaPostingBootstrapping {
-    let result: TiebaPostingBootstrapResult
-
-    func bootstrap(bduss: String) async throws -> TiebaPostingBootstrapResult {
-        result
-    }
-}
-
-private struct FailingSubmissionPostingBootstrap: TiebaPostingBootstrapping {
-    let error: TiebaPostingBootstrapError
-
-    func bootstrap(bduss: String) async throws -> TiebaPostingBootstrapResult {
-        throw error
-    }
-}
-
-private actor CountingSubmissionPostingBootstrap: TiebaPostingBootstrapping {
-    let result: TiebaPostingBootstrapResult
-    private var calls = 0
-
-    init(result: TiebaPostingBootstrapResult) {
-        self.result = result
-    }
-
-    func bootstrap(bduss: String) async throws -> TiebaPostingBootstrapResult {
-        calls += 1
-        return result
-    }
-
-    func callCount() -> Int { calls }
 }
 
 private enum SubmissionStubMode: Sendable {

@@ -433,16 +433,6 @@ final class AuthSessionTests: XCTestCase {
         XCTAssertFalse(AuthSession.isSuccessURL(try XCTUnwrap(URL(string: "https://tieba.baidu.com/index/tbwise/mine/extra"))))
     }
 
-    func testAuthSessionAllowsCookieValidationOnTiebaWebPages() throws {
-        let tiebaMine = try XCTUnwrap(URL(string: "https://tieba.baidu.com/mo/q/newmoindex?need_user=1"))
-        let successURL = try XCTUnwrap(URL(string: "https://tieba.baidu.com/index/tbwise/mine"))
-        let passportURL = try XCTUnwrap(URL(string: "https://wappass.baidu.com/passport?login"))
-
-        XCTAssertFalse(AuthSession.shouldAttemptCookieValidation(on: tiebaMine))
-        XCTAssertTrue(AuthSession.shouldAttemptCookieValidation(on: successURL))
-        XCTAssertFalse(AuthSession.shouldAttemptCookieValidation(on: passportURL))
-    }
-
     func testAuthSessionCancelsExternalAppRedirects() throws {
         let customScheme = try XCTUnwrap(URL(string: "tbclient://jump/pb?tid=1"))
         let encodedScheme = try XCTUnwrap(URL(string: "https://tieba.baidu.com/mo/q/checkurl?schema=tbclient%3A%2F%2Fjump%2Fpb%3Ftid%3D1"))

@@ -134,9 +134,6 @@ struct UserSummary: Identifiable, Equatable, Hashable, Codable, Sendable {
         return id == 0 ? "未知用户" : "用户\(id)"
     }
 
-    var portraitURL: URL? {
-        TiebaURL.avatar(portrait)
-    }
 }
 
 enum TiebaUserName {

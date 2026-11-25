@@ -340,10 +340,13 @@ final class SearchAPITests: XCTestCase {
     }
 
     func testFilteredForumPageStillAllowsPagination() async throws {
+        let previous = TiebaContentFilter.blocklist
+        TiebaContentFilter.updateBlocklist(BlocklistSnapshot(keywords: ["屏蔽词"]))
+        defer { TiebaContentFilter.updateBlocklist(previous) }
         let api = makeAPI { request in
             let fields = try Self.formFields(from: request)
             if fields["pn"] == "1" {
-                return Data(#"{"error_code":0,"thread_list":[{"id":907,"is_deleted":"1"}]}"#.utf8)
+                return Data(#"{"error_code":0,"thread_list":[{"id":906,"title":"屏蔽词"},{"id":907,"is_deleted":"1"}]}"#.utf8)
             }
             return Self.emptyForumPageResponseJSON
         }

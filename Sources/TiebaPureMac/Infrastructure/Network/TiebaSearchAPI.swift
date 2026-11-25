@@ -55,11 +55,12 @@ extension TiebaAPI {
             message: response.errorMessage
         )
 
-        let results = response.data.postList
+        let blocklist = TiebaContentFilter.blocklist
+        let results = response.data.postList.lazy
             .map(\.searchResult)
-            .filter(TiebaContentFilter.shouldKeep(searchResult:))
+            .filter { TiebaContentFilter.shouldKeep(searchResult: $0, blocklist: blocklist) }
         return SearchResultsPage(
-            results: results,
+            results: Array(results),
             currentPage: response.data.currentPage,
             hasMore: response.data.hasMore == 1
         )

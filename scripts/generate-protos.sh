@@ -37,7 +37,6 @@ roots = [
     "PbFloor/PbFloorRequest.proto",
     "PbFloor/PbFloorResponse.proto",
     "TiebaPureProfile/UserProfile.proto",
-    "ContentSubmission.proto",
 ]
 
 import_pattern = re.compile(r'^\s*import\s+(?:public\s+|weak\s+)?"([^"]+)";', re.MULTILINE)
