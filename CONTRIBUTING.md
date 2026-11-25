@@ -31,7 +31,9 @@ scripts/compile_and_run.sh debug
 
 应用版本、构建号和对应的双语 `CHANGELOG.md` 小节需要在打标签前准备好。发布标签使用 `vX.Y.Z`，每次发布递增 `CFBundleVersion`。
 
-无 Developer ID 时，使用通过 CI 验证的 Apple Silicon ad-hoc 签名包，在 GitHub Releases 分发 ZIP 和 `SHA256SUMS.txt`。下载说明注明签名、公证和更新状态。未配置 `MACOS_SIGN_IDENTITY` 时，推送标签会跳过 Developer ID 构建。这类构建可标为 Latest，由用户手动下载或通过 Homebrew 更新。
+推送标签后，`macOS Release` 工作流验证标签版本、运行测试，收录当前版本的发布说明和完整 `CHANGELOG.md`，并创建或更新 GitHub Release 草稿。已存在的标签可以使用 `workflow_dispatch` 重新生成草稿。审查草稿与下载包后发布，正式版可标为 Latest。
+
+未配置 `MACOS_SIGN_IDENTITY` 时，CI 构建 Apple Silicon ad-hoc 签名包并生成 `SHA256SUMS.txt`。用户通过 GitHub 或 Homebrew 更新。草稿的下载说明会注明签名、公证和自动更新状态。
 
 公证签名和 Sparkle 更新源的发布流程
 

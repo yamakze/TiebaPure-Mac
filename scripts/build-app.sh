@@ -45,7 +45,7 @@ ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sp
 PUBLIC_KEY=""
 if [[ "$CONFIGURATION" == release ]]; then
     PUBLIC_KEY="${SPARKLE_PUBLIC_KEY:-}"
-    if [[ -z "$PUBLIC_KEY" && -f "Resources/SparklePublicKey.txt" ]]; then
+    if [[ -z "${SPARKLE_PUBLIC_KEY+x}" && -f "Resources/SparklePublicKey.txt" ]]; then
         PUBLIC_KEY="$(tr -d ' \n\r\t' < Resources/SparklePublicKey.txt)"
     fi
 fi
