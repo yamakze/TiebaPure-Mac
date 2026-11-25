@@ -53,6 +53,18 @@ final class SocialRelationshipStateTests: XCTestCase {
         XCTAssertEqual(state.forumFollowOverride(accountID: "account-a", forum: forum), false)
     }
 
+    func testNewlyFollowedForumKeepsCoverFromServerList() throws {
+        let state = SocialRelationshipState()
+        let forum = makeForum(id: 73)
+        state.recordForumFollow(accountID: "account-a", forum: forum, isFollowed: true)
+
+        XCTAssertEqual(state.reconciledFollowedForums(accountID: "account-a", loaded: []), [forum])
+
+        var listed = forum
+        listed.avatarURL = try XCTUnwrap(URL(string: "https://example.com/forum.jpg"))
+        XCTAssertEqual(state.reconciledFollowedForums(accountID: "account-a", loaded: [listed]), [listed])
+    }
+
     func testLocalUserOverrideWinsOverLateFollowingList() {
         let state = SocialRelationshipState()
         let user = makeUser(id: 99)

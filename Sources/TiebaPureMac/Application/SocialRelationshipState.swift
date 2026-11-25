@@ -102,7 +102,7 @@ final class SocialRelationshipState {
         for change in uniqueForumOverrides(accountID: accountID) {
             if change.isFollowed {
                 if let index = result.firstIndex(where: { $0.refers(to: change.forum) }) {
-                    result[index] = change.forum
+                    result[index].avatarURL = result[index].avatarURL ?? change.forum.avatarURL
                 } else {
                     result.insert(change.forum, at: 0)
                 }
