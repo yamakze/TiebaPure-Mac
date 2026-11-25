@@ -1,8 +1,9 @@
-import Combine
+import Observation
 import Foundation
 
 @MainActor
-final class RecentForumStore: ObservableObject {
+@Observable
+final class RecentForumStore {
     static let shared = RecentForumStore()
 
     private let key: String
@@ -12,8 +13,8 @@ final class RecentForumStore: ObservableObject {
     private let persistence: any RecentForumPersistence
     private let persistentBackendIsAvailable: Bool
     private let faultInjector: PersistenceFaultInjector
-    @Published private(set) var items: [RecentForum]
-    @Published private(set) var persistenceAvailability: PersistenceAvailability
+    private(set) var items: [RecentForum]
+    private(set) var persistenceAvailability: PersistenceAvailability
 
     init(
         defaults: UserDefaults = .standard,
@@ -47,6 +48,7 @@ final class RecentForumStore: ObservableObject {
         persistenceAvailability = snapshot.availability
     }
 
+    /// Returns whether the snapshot was read, including from a non-durable backend.
     @discardableResult
     func reload() -> Bool {
         guard persistence.capability.canAccessBackend else {

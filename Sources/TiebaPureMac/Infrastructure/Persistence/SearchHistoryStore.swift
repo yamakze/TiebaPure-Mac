@@ -1,8 +1,9 @@
-import Combine
+import Observation
 import Foundation
 
 @MainActor
-final class SearchHistoryStore: ObservableObject {
+@Observable
+final class SearchHistoryStore {
     static let shared = SearchHistoryStore()
 
     private let defaults: UserDefaults
@@ -11,8 +12,8 @@ final class SearchHistoryStore: ObservableObject {
     private let persistence: any SearchHistoryPersistence
     private let persistentBackendIsAvailable: Bool
     private let faultInjector: PersistenceFaultInjector
-    @Published private(set) var items: [String]
-    @Published private(set) var persistenceAvailability: PersistenceAvailability
+    private(set) var items: [String]
+    private(set) var persistenceAvailability: PersistenceAvailability
 
     init(
         defaults: UserDefaults = .standard,
@@ -34,7 +35,7 @@ final class SearchHistoryStore: ObservableObject {
             defaults: defaults,
             legacyKey: key,
             legacyValue: defaults.object(forKey: key),
-            decodeLegacy: { _ in defaults.stringArray(forKey: key) },
+            decodeLegacy: { $0 as? [String] },
             load: persistence.load,
             replaceAll: persistence.replaceAll,
             sanitize: { SearchHistoryPolicy.sanitized($0, limit: configuredLimit) },
@@ -44,6 +45,7 @@ final class SearchHistoryStore: ObservableObject {
         persistenceAvailability = snapshot.availability
     }
 
+    /// Returns whether the snapshot was read, including from a non-durable backend.
     @discardableResult
     func reload() -> Bool {
         guard persistence.capability.canAccessBackend else {
@@ -75,7 +77,9 @@ final class SearchHistoryStore: ObservableObject {
 
     @discardableResult
     func record(_ keyword: String) -> Bool {
-        persist(SearchHistoryPolicy.adding(keyword, to: items, limit: limit))
+        let updated = SearchHistoryPolicy.adding(keyword, to: items, limit: limit)
+        if updated == items && persistenceAvailability.canPersist { return true }
+        return persist(updated)
     }
 
     @discardableResult

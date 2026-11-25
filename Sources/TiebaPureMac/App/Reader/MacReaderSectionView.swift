@@ -3,8 +3,8 @@ import SwiftUI
 struct MacReaderSectionView: View {
     @EnvironmentObject private var session: MacSession
     @Bindable var state: MacReaderSectionState
-    @ObservedObject var recentForums: RecentForumStore
-    @ObservedObject var searchHistory: SearchHistoryStore
+    let recentForums: RecentForumStore
+    let searchHistory: SearchHistoryStore
     let openFollowedForum: (Forum) -> Void
 
     @State private var searchPresented = false
@@ -80,9 +80,11 @@ struct MacReaderSectionView: View {
                     .searchSuggestions {
                         if acceptsThreadSearch && (section == .search || !state.input.isEmpty)
                             && (state.query.isEmpty || state.input != state.query) {
-                            ForEach(searchHistory.items.filter {
-                                state.input.isEmpty || $0.localizedCaseInsensitiveContains(state.input)
-                            }.prefix(8), id: \.self) { keyword in
+                            let input = state.input
+                            let suggestions = searchHistory.items.lazy.filter {
+                                input.isEmpty || $0.localizedCaseInsensitiveContains(input)
+                            }.prefix(8)
+                            ForEach(Array(suggestions), id: \.self) { keyword in
                                 Button { submit(keyword) } label: {
                                     Label(keyword, systemImage: "clock")
                                 }
@@ -317,6 +319,7 @@ struct MacReaderSectionView: View {
     private func returnToForumEntry() {
         searchPresented = false
         state.forum = nil
+        state.recordsForumVisit = false
         state.input = ""
         state.query = ""
         state.historyError = nil
@@ -375,11 +378,13 @@ struct MacReaderSectionView: View {
                 state.listPosition = nil
             }
             state.pages.accept(incoming, nextPage: next, for: request)
-            if section == .forum, query.isEmpty, request.replacesItems, let forum {
+            if section == .forum, query.isEmpty, let forum {
                 let resolved = incoming.first?.thread.forumRoute ?? forum
-                state.forum = resolved
-                if !recentForums.save(resolved) {
-                    state.historyError = "无法保存访问记录。"
+                if request.replacesItems || state.recordsForumVisit { state.forum = resolved }
+                if state.recordsForumVisit && (!incoming.isEmpty || next == nil) {
+                    let saved = recentForums.save(resolved)
+                    state.recordsForumVisit = !saved
+                    state.historyError = saved ? nil : "无法保存访问记录。"
                 }
             }
         } catch {

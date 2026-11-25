@@ -205,15 +205,7 @@ final class SwiftDataThreadReadingPositionPersistence:
         persistenceAvailability: PersistenceAvailability? = nil
     ) {
         modelContext = modelContainer.mainContext
-        let resolvedAvailability = persistenceAvailability
-            ?? AppModelContainer.persistenceAvailability(for: modelContainer)
-        if resolvedAvailability.canPersist {
-            capability = AppModelContainer.allowsLegacyCleanup(for: modelContainer)
-                ? .durable
-                : .fallback
-        } else {
-            capability = .fallback
-        }
+        capability = persistenceAvailability?.canPersist == false ? .fallback : .durable
         databaseActorTask = Task.detached(priority: .utility) {
             ThreadReadingPositionDatabaseActor(modelContainer: modelContainer)
         }
@@ -741,7 +733,10 @@ extension LocalThreadLibraryStore {
             favoritesKey: favoritesKey,
             readingPositionsKey: readingPositionsKey,
             readingPositionLimit: readingPositionLimit,
-            persistence: SwiftDataThreadReadingPositionPersistence(modelContainer: AppModelContainer.shared),
+            persistence: SwiftDataThreadReadingPositionPersistence(
+                modelContainer: AppModelContainer.shared.container,
+                persistenceAvailability: AppModelContainer.shared.availability
+            ),
             faultInjector: faultInjector,
             now: now
         )

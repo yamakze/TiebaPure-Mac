@@ -23,7 +23,7 @@ enum AppModelContainer {
         ContentDraftRecord.self,
     ]
 
-    private static let sharedResolution: Resolution = {
+    static let shared: Resolution = {
         let schema = Schema(models)
         do {
             return try resolve(
@@ -45,7 +45,6 @@ enum AppModelContainer {
         }
     }()
 
-    static let shared = sharedResolution.container
     /// Resolves a durable container first and degrades to an in-memory
     /// container only when opening the on-disk store fails. The durability bit
     /// is kept alongside the container so a fallback session can import legacy
@@ -61,37 +60,6 @@ enum AppModelContainer {
             return Resolution(container: try fallback(), availability: .unavailable)
         }
     }
-
-    static func persistenceAvailability(for container: ModelContainer) -> PersistenceAvailability {
-        persistenceAvailability(for: container, resolvedSharedContainer: sharedResolution)
-    }
-
-    static func persistenceAvailability(
-        for container: ModelContainer,
-        resolvedSharedContainer: Resolution
-    ) -> PersistenceAvailability {
-        guard container === resolvedSharedContainer.container else {
-            // Explicitly injected containers are owned by their caller (tests
-            // use this path) and are considered writable unless the store
-            // initializer is given an unavailable override.
-            return .available
-        }
-        return resolvedSharedContainer.availability
-    }
-
-    static func allowsLegacyCleanup(for container: ModelContainer) -> Bool {
-        allowsLegacyCleanup(for: container, resolvedSharedContainer: sharedResolution)
-    }
-
-    static func allowsLegacyCleanup(
-        for container: ModelContainer,
-        resolvedSharedContainer: Resolution
-    ) -> Bool {
-        persistenceAvailability(
-            for: container,
-            resolvedSharedContainer: resolvedSharedContainer
-        ).canPersist
-    }
 }
 
 // Each store persists a full snapshot of its in-memory array; sortIndex
@@ -99,7 +67,7 @@ enum AppModelContainer {
 // encoding did.
 
 protocol OrderedPersistentRecord: PersistentModel {
-    var sortIndex: Int { get }
+    var sortIndex: Int { get set }
 }
 
 @MainActor
@@ -125,6 +93,36 @@ enum PersistedRecordStore {
             }
             for record in records {
                 context.insert(record)
+            }
+            try beforeSave()
+            try save(context)
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
+    /// Reorders retained entries in place and writes only additions and removals.
+    static func synchronize<Record: OrderedPersistentRecord, Entry: Hashable>(
+        _ entries: [Entry],
+        in context: ModelContext,
+        entry: KeyPath<Record, Entry>,
+        makeRecord: (Entry, Int) -> Record,
+        beforeSave: () throws -> Void
+    ) throws {
+        do {
+            var existing = Dictionary(grouping: try context.fetch(FetchDescriptor<Record>())) {
+                $0[keyPath: entry]
+            }
+            for (index, value) in entries.enumerated() {
+                if let record = existing[value]?.popLast() {
+                    if record.sortIndex != index { record.sortIndex = index }
+                } else {
+                    context.insert(makeRecord(value, index))
+                }
+            }
+            for records in existing.values {
+                records.forEach(context.delete)
             }
             try beforeSave()
             try save(context)

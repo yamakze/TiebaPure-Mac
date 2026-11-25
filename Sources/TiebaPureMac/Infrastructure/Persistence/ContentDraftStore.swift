@@ -117,7 +117,7 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
     private var maintenanceTask: Task<Void, Never>?
 
     init(
-        modelContainer: ModelContainer = AppModelContainer.shared,
+        modelContainer: ModelContainer,
         persistenceAvailability: PersistenceAvailability? = nil
     ) {
         self.modelContainer = modelContainer
@@ -125,8 +125,7 @@ final class SwiftDataContentDraftPersistenceBackend: ContentDraftPersistenceBack
         databaseActorTask = Task.detached(priority: .utility) {
             ContentDraftDatabaseActor(modelContainer: modelContainer)
         }
-        let availability = persistenceAvailability
-            ?? AppModelContainer.persistenceAvailability(for: modelContainer)
+        let availability = persistenceAvailability ?? .available
         persistentBackendIsAvailable = availability.canPersist
         self.persistenceAvailability = availability
     }
@@ -565,7 +564,10 @@ final class ContentDraftStore {
     }
 
     convenience init() {
-        self.init(persistence: SwiftDataContentDraftPersistenceBackend(modelContainer: AppModelContainer.shared))
+        self.init(persistence: SwiftDataContentDraftPersistenceBackend(
+            modelContainer: AppModelContainer.shared.container,
+            persistenceAvailability: AppModelContainer.shared.availability
+        ))
     }
 
     convenience init(

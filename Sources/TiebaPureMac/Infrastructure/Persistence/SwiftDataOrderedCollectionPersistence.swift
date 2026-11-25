@@ -133,12 +133,7 @@ final class SwiftDataBrowsingHistoryPersistence: BrowsingHistoryPersistence {
         persistenceAvailability: PersistenceAvailability? = nil
     ) {
         modelContext = modelContainer.mainContext
-        let resolvedAvailability = persistenceAvailability
-            ?? AppModelContainer.persistenceAvailability(for: modelContainer)
-        capability = Self.capability(
-            availability: resolvedAvailability,
-            modelContainer: modelContainer
-        )
+        capability = persistenceAvailability?.canPersist == false ? .fallback : .durable
         databaseActorTask = Task.detached(priority: .utility) {
             BrowsingHistoryDatabaseActor(modelContainer: modelContainer)
         }
@@ -182,16 +177,6 @@ final class SwiftDataBrowsingHistoryPersistence: BrowsingHistoryPersistence {
         let databaseActor = await databaseActorTask.value
         return try await databaseActor.apply(.deleteAll)
     }
-
-    private static func capability(
-        availability: PersistenceAvailability,
-        modelContainer: ModelContainer
-    ) -> PersistenceCapability {
-        guard availability.canPersist else { return .fallback }
-        return AppModelContainer.allowsLegacyCleanup(for: modelContainer)
-            ? .durable
-            : .fallback
-    }
 }
 
 @MainActor
@@ -206,15 +191,7 @@ final class SwiftDataRecentForumPersistence: RecentForumPersistence {
         persistenceAvailability: PersistenceAvailability? = nil
     ) {
         modelContext = modelContainer.mainContext
-        let resolvedAvailability = persistenceAvailability
-            ?? AppModelContainer.persistenceAvailability(for: modelContainer)
-        guard resolvedAvailability.canPersist else {
-            capability = .fallback
-            return
-        }
-        capability = AppModelContainer.allowsLegacyCleanup(for: modelContainer)
-            ? .durable
-            : .fallback
+        capability = persistenceAvailability?.canPersist == false ? .fallback : .durable
     }
 
     func load() throws -> [RecentForum] {
@@ -228,12 +205,11 @@ final class SwiftDataRecentForumPersistence: RecentForumPersistence {
         _ entries: [RecentForum],
         beforeCommit: () throws -> Void
     ) throws {
-        try PersistedRecordStore.replaceAll(
-            RecentForumRecord.self,
-            with: entries.enumerated().map {
-                RecentForumRecord(entry: $0.element, sortIndex: $0.offset)
-            },
+        try PersistedRecordStore.synchronize(
+            entries,
             in: modelContext,
+            entry: \RecentForumRecord.entry,
+            makeRecord: RecentForumRecord.init(entry:sortIndex:),
             beforeSave: beforeCommit
         )
     }
@@ -251,15 +227,7 @@ final class SwiftDataSearchHistoryPersistence: SearchHistoryPersistence {
         persistenceAvailability: PersistenceAvailability? = nil
     ) {
         modelContext = modelContainer.mainContext
-        let resolvedAvailability = persistenceAvailability
-            ?? AppModelContainer.persistenceAvailability(for: modelContainer)
-        guard resolvedAvailability.canPersist else {
-            capability = .fallback
-            return
-        }
-        capability = AppModelContainer.allowsLegacyCleanup(for: modelContainer)
-            ? .durable
-            : .fallback
+        capability = persistenceAvailability?.canPersist == false ? .fallback : .durable
     }
 
     func load() throws -> [String] {
@@ -273,12 +241,11 @@ final class SwiftDataSearchHistoryPersistence: SearchHistoryPersistence {
         _ entries: [String],
         beforeCommit: () throws -> Void
     ) throws {
-        try PersistedRecordStore.replaceAll(
-            SearchHistoryRecord.self,
-            with: entries.enumerated().map {
-                SearchHistoryRecord(keyword: $0.element, sortIndex: $0.offset)
-            },
+        try PersistedRecordStore.synchronize(
+            entries,
             in: modelContext,
+            entry: \SearchHistoryRecord.keyword,
+            makeRecord: SearchHistoryRecord.init(keyword:sortIndex:),
             beforeSave: beforeCommit
         )
     }

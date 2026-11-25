@@ -45,6 +45,7 @@ final class MacReaderSectionState {
     var listPosition: String?
     var followedPosition: Forum.ID?
     var historyError: String?
+    var recordsForumVisit = false
 
     init(section: ReaderSection) {
         self.section = section
@@ -90,6 +91,7 @@ final class MacReaderSectionState {
 
     func openForum(_ forum: Forum, sort: ForumThreadCategory) {
         self.forum = forum
+        recordsForumVisit = true
         forumSort = sort
         onlyFeatured = false
         query = ""

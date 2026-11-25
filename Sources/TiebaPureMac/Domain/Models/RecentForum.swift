@@ -1,6 +1,6 @@
 import Foundation
 
-struct RecentForum: Codable, Equatable, Identifiable, Sendable {
+struct RecentForum: Codable, Hashable, Identifiable, Sendable {
     var name: String
     var displayName: String
     var avatarURL: URL?

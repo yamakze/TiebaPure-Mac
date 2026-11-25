@@ -1,35 +1,20 @@
 import Foundation
 
-/// macOS 14+ always uses the application SwiftData container.
-@MainActor
-struct OrderedCollectionPersistenceBundle {
-    let browsingHistory: any BrowsingHistoryPersistence
-    let recentForums: any RecentForumPersistence
-    let searchHistory: any SearchHistoryPersistence
-
-    init() {
-        let container = AppModelContainer.shared
-        browsingHistory = SwiftDataBrowsingHistoryPersistence(modelContainer: container)
-        recentForums = SwiftDataRecentForumPersistence(modelContainer: container)
-        searchHistory = SwiftDataSearchHistoryPersistence(modelContainer: container)
-    }
-}
-
+/// Each adapter opens on first use. Active history stores do not start the browsing history executor.
 @MainActor
 enum AppOrderedCollectionPersistence {
-    private static let bundle = OrderedCollectionPersistenceBundle()
-
-    static var browsingHistory: any BrowsingHistoryPersistence {
-        bundle.browsingHistory
-    }
-
-    static var recentForums: any RecentForumPersistence {
-        bundle.recentForums
-    }
-
-    static var searchHistory: any SearchHistoryPersistence {
-        bundle.searchHistory
-    }
+    static let browsingHistory = SwiftDataBrowsingHistoryPersistence(
+        modelContainer: AppModelContainer.shared.container,
+        persistenceAvailability: AppModelContainer.shared.availability
+    )
+    static let recentForums = SwiftDataRecentForumPersistence(
+        modelContainer: AppModelContainer.shared.container,
+        persistenceAvailability: AppModelContainer.shared.availability
+    )
+    static let searchHistory = SwiftDataSearchHistoryPersistence(
+        modelContainer: AppModelContainer.shared.container,
+        persistenceAvailability: AppModelContainer.shared.availability
+    )
 }
 
 extension BrowsingHistoryStore {

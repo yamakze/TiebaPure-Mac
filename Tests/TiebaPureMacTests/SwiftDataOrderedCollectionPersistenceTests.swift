@@ -35,6 +35,15 @@ final class SwiftDataOrderedCollectionPersistenceTests: XCTestCase {
         XCTAssertEqual(try reopenedBrowsing.load(), browsingEntries)
         XCTAssertEqual(try reopenedRecent.load(), recentEntries)
         XCTAssertEqual(try reopenedSearch.load(), searchEntries)
+
+        let previousSearchRows = try container.mainContext.fetch(FetchDescriptor<SearchHistoryRecord>())
+        let unchanged = try XCTUnwrap(previousSearchRows.first { $0.keyword == "first" }).persistentModelID
+        try search.replaceAll(["first", "new"])
+        XCTAssertEqual(try reopenedSearch.load(), ["first", "new"])
+        let currentSearchRows = try container.mainContext.fetch(FetchDescriptor<SearchHistoryRecord>())
+        let retained = try XCTUnwrap(currentSearchRows.first { $0.keyword == "first" })
+        XCTAssertEqual(retained.persistentModelID, unchanged)
+        XCTAssertEqual(try reopenedRecent.load(), recentEntries)
     }
 
     @MainActor
