@@ -94,9 +94,9 @@ brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
 
 ### 手动下载
 
-从 [Releases](https://github.com/yamakze/TiebaPure-Mac/releases) 下载 `TiebaPure-Mac-<version>.zip`，解压后将 `TiebaPure-Mac.app` 拖入 **应用程序** 目录。
+从 [Releases](https://github.com/yamakze/TiebaPure-Mac/releases) 下载 `TiebaPure-Mac-<version>.zip`，解压后将 `TiebaPure-Mac.app` 移入 **应用程序** 目录。可使用同一发布页提供的 `SHA256SUMS.txt` 校验下载文件的完整性。
 
-若 macOS 拒绝打开应用，用同一版本发布页的 `SHA256SUMS.txt` 核对 ZIP。校验不符时重新下载。
+未经 Apple Developer ID 签名与公证的构建在首次打开时可能会被 macOS 拦截，可参阅 [Apple 支持](https://support.apple.com/zh-cn/102445) 手动允许运行。
 
 ## 构建与运行
 
@@ -122,7 +122,7 @@ make release
 make clean
 ```
 
-日常测试使用确定性本地数据桩，不访问真实贴吧接口。发布前需运行匿名网络连通性冒烟验证时执行：
+测试使用确定性本地数据桩。运行匿名网络连通性冒烟验证：
 
 ```bash
 RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests

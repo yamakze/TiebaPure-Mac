@@ -94,9 +94,9 @@ brew upgrade --cask yamakze/tiebapure-mac/tiebapure-mac
 
 ### Manual Download
 
-Download `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases), unpack it, and drag `TiebaPure-Mac.app` into your **Applications** folder.
+Download `TiebaPure-Mac-<version>.zip` from [Releases](https://github.com/yamakze/TiebaPure-Mac/releases), unpack it, and move `TiebaPure-Mac.app` into your **Applications** folder. You can verify the download integrity against `SHA256SUMS.txt` from the same release.
 
-If macOS rejects the download, compare the ZIP with `SHA256SUMS.txt` from the same release and download it again if the hash differs.
+Builds without an Apple Developer ID signature or notarization may trigger a Gatekeeper warning on first launch; see [Apple Support](https://support.apple.com/en-us/102445) if macOS blocks opening the app.
 
 ## Building
 
@@ -122,7 +122,7 @@ make release
 make clean
 ```
 
-Standard tests rely on deterministic local fixtures and avoid live network access. To run read-only online connectivity verification prior to release:
+Standard tests rely on deterministic local fixtures and avoid live network access. run read-only online connectivity verification:
 
 ```bash
 RUN_ANONYMOUS_LIVE_SMOKE=1 swift test --filter AnonymousLiveSmokeTests

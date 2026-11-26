@@ -5,8 +5,9 @@
 ## 开发与验证
 
 ```sh
-swift test
-scripts/compile_and_run.sh debug
+make test
+make verify
+make run
 ```
 
 协议、状态或存储变更须有行为回归验证。使用 Conventional Commits，提交信息及 PR 标题用英文，PR 详情用中文。列出实际验证及未验证范围。
@@ -15,17 +16,15 @@ scripts/compile_and_run.sh debug
 
 ## 代码边界
 
-- `Domain` 保存模型、映射与业务规则；平台图片、WebKit 和窗口代码放在 `App` 或 `Infrastructure`。
-- `Infrastructure` 保存协议、媒体下载、认证及系统存储实现，写操作复用已有协调器。
+- `Domain` 保存领域模型与内容过滤规则。
+- `Infrastructure` 保存协议接口、`Network/Mapping` 模型映射、媒体下载、认证及系统存储实现，写操作复用已有协调器。
 - `App` 保存 Mac 场景、界面及窗口状态。账号归应用，选中内容及导航归窗口。
-- 当前使用一个应用模块。出现真实模块复用需求时再拆 target，避免为目录分层暴露大量 public API。
-- 不新增 iOS、Catalyst、IPA、模拟器构建或旧系统兼容分支。
 
 ## 上游与生成代码
 
-`origin` 指向本 fork，`upstream` 指向原项目。按具体协议修复选择性引入上游提交，保留作者信息；不整体合并已删除的 iOS 工程。
+`origin` 指向本 fork，`upstream` 指向原项目。按具体协议修复选择性引入上游提交，并保留原作者信息。
 
-修改 `Protos` 后运行 `scripts/generate-protos.sh`，同步提交生成文件。生成器版本须与 SwiftProtobuf 运行时匹配。协议测试使用独立 wire fixture。
+修改 `Protos` 后运行 `scripts/generate-protos.sh`，同步提交生成文件，且生成器版本须与 SwiftProtobuf 运行时匹配。
 
 ## 发布
 
@@ -33,7 +32,7 @@ scripts/compile_and_run.sh debug
 
 推送标签后，`macOS Release` 工作流验证标签版本、运行测试，从 `CHANGELOG.md` 提取对应版本的发布说明，并创建或更新 GitHub Release 草稿。已存在的标签可以使用 `workflow_dispatch` 重新生成草稿。审查草稿与下载包后发布，正式版可标为 Latest。
 
-CI 默认构建 Apple Silicon ad-hoc 签名包，使用项目独立的 Sparkle Ed25519 密钥签名更新源和 ZIP。Developer ID 签名与 Apple 公证可选。草稿的下载说明会注明签名与公证状态。
+CI 默认构建 Apple Silicon ad-hoc 签名包，使用项目独立的 Sparkle Ed25519 密钥签名更新源和 ZIP。Developer ID 签名与 Apple 公证可选。
 
 Sparkle 更新源的发布流程
 

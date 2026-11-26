@@ -65,7 +65,6 @@ jobs:
       - name: Run tests
         run: swift test
       - name: Build and sign Apple Silicon app
-        id: package
         env:
           CODE_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY || '-' }}
           MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
@@ -111,15 +110,11 @@ jobs:
             xcrun stapler staple "$app"
             xcrun stapler validate "$app"
             spctl --assess --type execute --verbose "$app"
-            echo 'signing_mode=notarized' >> "$GITHUB_OUTPUT"
-          else
-            echo 'signing_mode=adhoc' >> "$GITHUB_OUTPUT"
           fi
       - name: Package release and generate signed Sparkle appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          SIGNING_MODE: ${{ steps.package.outputs.signing_mode }}
-        run: python3 scripts/release-assets.py "$RELEASE_TAG" artifacts/macos/TiebaPure-Mac.app "$SIGNING_MODE"
+        run: python3 scripts/release-assets.py "$RELEASE_TAG" artifacts/macos/TiebaPure-Mac.app
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos-release
@@ -146,7 +141,6 @@ jobs:
           set -euo pipefail
           sha256sum -c SHA256SUMS.txt
           version=${RELEASE_TAG#v}
-          { cat RELEASE_NOTES.md; printf '\n\n'; cat PACKAGE_NOTES.md; } > notes.md
           assets=("TiebaPure-Mac-$version.zip" SHA256SUMS.txt appcast.xml)
           owner=${GH_REPO%%/*}
           repo=${GH_REPO#*/}
@@ -158,10 +152,10 @@ jobs:
           case "$state" in
             missing)
               gh release create "$RELEASE_TAG" "${assets[@]}" --draft --verify-tag \
-                --title "TiebaPure-Mac $version" --notes-file notes.md
+                --title "TiebaPure-Mac $version" --notes-file RELEASE_NOTES.md
               ;;
             draft)
-              gh release edit "$RELEASE_TAG" --notes-file notes.md
+              gh release edit "$RELEASE_TAG" --notes-file RELEASE_NOTES.md
               gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
               ;;
             published)
