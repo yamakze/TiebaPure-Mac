@@ -34,6 +34,13 @@ icon_file="AppIcon-$icon_revision.icns"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/$icon_file"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -insert CFBundleIconFile -string "$icon_file" "$APP/Contents/Info.plist"
+if [[ -n "${BUILD_VERSION:-}" ]]; then
+    if [[ ! "$BUILD_VERSION" =~ ^[0-9]+$ ]]; then
+        echo "BUILD_VERSION must be numeric: $BUILD_VERSION" >&2
+        exit 1
+    fi
+    plutil -replace CFBundleVersion -string "$BUILD_VERSION" "$APP/Contents/Info.plist"
+fi
 cp -R Resources/zh-Hans.lproj Resources/PrivacyInfo.xcprivacy LICENSE LICENSES/*.txt NOTICE.md "$APP/Contents/Resources/"
 for resource in "$BIN_DIR"/*.bundle; do
     [[ -d "$resource" ]] || continue

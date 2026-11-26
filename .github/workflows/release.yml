@@ -51,7 +51,7 @@ jobs:
           fi
           scripts/verify-project.sh
           scripts/release-notes.sh "$RELEASE_TAG" >/dev/null
-      - name: Check release build number
+      - name: Allocate release build number
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -59,9 +59,21 @@ jobs:
           previous=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
             --limit 2 --json tagName --jq '.[].tagName' | awk -v tag="$RELEASE_TAG" '$0 != tag && !found { print; found = 1 }')
           if [[ -n "$previous" ]]; then
-            git fetch --depth=1 --no-tags origin "refs/tags/$previous"
-            git show FETCH_HEAD:Resources/Info.plist | python3 scripts/lib/check-release-build.py Resources/Info.plist
+            appcast=$(gh release view "$previous" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[] | select(.name == "appcast.xml") | .name')
+            if [[ -n "$appcast" ]]; then
+              build_version=$(gh release download "$previous" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml --output - \
+                | python3 scripts/lib/allocate-build-number.py Resources/Info.plist --previous-appcast)
+            else
+              # Releases before Sparkle used the build number from the tagged plist.
+              git fetch --depth=1 --no-tags origin "refs/tags/$previous"
+              build_version=$(git show FETCH_HEAD:Resources/Info.plist | python3 scripts/lib/allocate-build-number.py Resources/Info.plist --previous-plist)
+            fi
+          else
+            build_version=$(python3 scripts/lib/allocate-build-number.py Resources/Info.plist)
           fi
+          echo "Allocated CFBundleVersion: $build_version"
+          echo "BUILD_VERSION=$build_version" >> "$GITHUB_ENV"
       - name: Check Sparkle signing configuration
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}

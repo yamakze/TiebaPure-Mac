@@ -28,7 +28,7 @@ make run
 
 ## 发布
 
-应用版本、构建号和对应的双语 `CHANGELOG.md` 小节需要在打标签前准备好。发布标签使用 `vX.Y.Z`，每次发布递增 `CFBundleVersion`。
+应用版本和对应的双语 `CHANGELOG.md` 小节需要在打标签前准备好。发布标签使用 `vX.Y.Z`。CI 根据上一正式版递增并注入 `CFBundleVersion`。
 
 推送标签后，`macOS Release` 工作流验证标签版本、运行测试，从 `CHANGELOG.md` 提取对应版本的发布说明，并创建或更新 GitHub Release 草稿。已存在的标签可以使用 `workflow_dispatch` 重新生成草稿。审查草稿与下载包后发布，正式版可标为 Latest。
 
