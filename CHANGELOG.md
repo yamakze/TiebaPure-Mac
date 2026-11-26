@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2 — 2026-11-26
+
+- 为 ad-hoc 签名构建启用基于 Sparkle Ed25519 签名的应用内自动更新与 `appcast.xml` 分发。
+- 从 `v0.1.0` 或 `v0.1.1` 升级时，需手动安装本版一次，后续版本可在应用内检查更新。
+- 修复 Release 工作流下载构建产物的问题，并移除每个版本说明末尾重复的固定下载声明。
+- 优化 CI 缓存、Xcode 选择与 Homebrew Cask 更新流程，并同步完善项目文档。
+
+### English
+
+- Enable Sparkle Ed25519-signed in-app automatic updates and `appcast.xml` feeds for ad-hoc signed releases.
+- Install this release manually once when upgrading from `v0.1.0` or `v0.1.1` to enable in-app update checks for future releases.
+- Fix artifact downloads in the release workflow and drop repetitive per-release download boilerplate from release notes.
+- Optimize CI caching, Xcode selection, Homebrew Cask updates, and project documentation.
+
 ## 0.1.1 — 2026-11-25
 
 - 修复新关注贴吧的封面被覆盖的问题。关注列表刷新后会保留服务端返回的封面。
