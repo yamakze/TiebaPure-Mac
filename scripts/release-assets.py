@@ -11,10 +11,14 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-if len(sys.argv) != 3 or not re.fullmatch(r"v\d+\.\d+\.\d+", sys.argv[1]):
-    raise SystemExit("Usage: scripts/release-assets.py vX.Y.Z <app bundle>")
+if (
+    len(sys.argv) != 4
+    or not re.fullmatch(r"v\d+\.\d+\.\d+", sys.argv[1])
+    or sys.argv[3] not in {"adhoc", "notarized"}
+):
+    raise SystemExit("Usage: scripts/release-assets.py vX.Y.Z <app bundle> <adhoc|notarized>")
 
-tag, app = sys.argv[1], Path(sys.argv[2]).resolve()
+tag, app, signing_mode = sys.argv[1], Path(sys.argv[2]).resolve(), sys.argv[3]
 version = tag.removeprefix("v")
 root = Path(__file__).resolve().parents[1]
 info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
@@ -64,12 +68,19 @@ with tempfile.TemporaryDirectory(prefix=".release.", dir=output.parent) as direc
     )
     binary = app / "Contents" / "MacOS" / "TiebaPureMac"
     architectures = subprocess.check_output(["lipo", "-archs", str(binary)], text=True).strip()
+    if signing_mode == "adhoc":
+        signing_zh = "本版使用 ad-hoc 签名，未经 Apple 公证，首次打开受阻时可参阅 [Apple 支持](https://support.apple.com/zh-cn/102445)。"
+        signing_en = "This build is ad-hoc signed and unnotarized. See [Apple Support](https://support.apple.com/en-us/102445) if macOS blocks the first launch."
+    else:
+        signing_zh = "本版已使用 Developer ID 签名并通过 Apple 公证。"
+        signing_en = "This build is Developer ID signed and notarized."
     package_notes = work / "PACKAGE_NOTES.md"
     package_notes.write_text(
-        f"## Downloads\n\n"
-        f"- macOS 14+: `TiebaPure-Mac-{version}.zip` ({architectures}).\n"
-        f"- `SHA256SUMS.txt`: download integrity checksums.\n"
-        f"- `appcast.xml`: Sparkle 2 signed auto-update feed.\n"
+        "## 下载与升级 / Download and upgrade\n\n"
+        f"- macOS 14+ (`{architectures}`) · `{archive.name}`\n"
+        "- `SHA256SUMS.txt` · 下载校验 / Download checksums\n"
+        "- `appcast.xml` · 已签名的 Sparkle 更新源 / Signed Sparkle update feed\n\n"
+        f"{signing_zh}\n\n{signing_en}\n"
     )
     checksums = work / "SHA256SUMS.txt"
     with checksums.open("w") as manifest:
